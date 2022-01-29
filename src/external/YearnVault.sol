@@ -2,6 +2,8 @@
 pragma solidity ^0.8.4;
 
 interface YearnVault {
+    function token() external view returns (address);
+
     function deposit(uint256 amount) external;
 
     function withdraw(uint256 shareAmount, address recipient)

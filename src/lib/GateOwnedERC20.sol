@@ -7,13 +7,16 @@ contract GateOwnedERC20 is ERC20 {
     error Error_NotGate();
 
     address public immutable gate;
+    address public immutable vault;
 
     constructor(
         string memory name,
         string memory symbol,
-        address gate_
+        address gate_,
+        address vault_
     ) ERC20(name, symbol, 18) {
         gate = gate_;
+        vault = vault_;
     }
 
     function gateMint(address to, uint256 amount) external {
