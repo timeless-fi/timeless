@@ -2,11 +2,14 @@
 pragma solidity ^0.8.4;
 
 import {Gate} from "./Gate.sol";
-import {GateOwnedERC20} from "./lib/GateOwnedERC20.sol";
+import {BaseERC20} from "./lib/BaseERC20.sol";
 
-contract PerpetualYieldToken is GateOwnedERC20 {
+/// @title PerpetualYieldToken
+/// @author zefram.eth
+/// @notice The ERC20 contract representing perpetual yield tokens
+contract PerpetualYieldToken is BaseERC20 {
     constructor(address gate_, address vault_)
-        GateOwnedERC20("NAME_TBD", "SYMBOL_TBD", gate_, vault_)
+        BaseERC20("NAME_TBD", "SYMBOL_TBD", gate_, vault_)
     {}
 
     function transfer(address to, uint256 amount)

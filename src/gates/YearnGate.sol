@@ -9,6 +9,9 @@ import {FullMath} from "../lib/FullMath.sol";
 import {YearnVault} from "../external/YearnVault.sol";
 import {PerpetualYieldToken} from "../PerpetualYieldToken.sol";
 
+/// @title YearnGate
+/// @author zefram.eth
+/// @notice The Gate implementation for Yearn vaults
 contract YearnGate is Gate {
     /// -----------------------------------------------------------------------
     /// Library usage

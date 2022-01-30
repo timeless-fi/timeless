@@ -9,6 +9,23 @@ import {FullMath} from "./lib/FullMath.sol";
 import {PrincipalToken} from "./PrincipalToken.sol";
 import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 
+/// @title Gate
+/// @author zefram.eth
+/// @notice Gate is the main contract users interact with to mint/burn PrincipalToken
+/// and PerpetualYieldToken, as well as claim the yield earned by PYTs.
+/// @dev Gate is an abstract contract that should be inherited from in order to support
+/// a specific vault protocol (e.g. YearnGate supports YearnVault). Each Gate handles
+/// all vaults & associated PTs/PYTs of a specific vault protocol.
+///
+/// Vaults are yield-generating contracts used by Gate. Gate makes several assumptions about
+/// a vault:
+/// 1) A vault has a single associated underlying token that is immutable.
+/// 2) A vault gives depositors yield denominated in the underlying token.
+/// 3) A vault depositor owns shares in the vault, which represents their deposit.
+/// 4) Vaults have a notion of "price per share", which is the amount of underlying tokens
+///    each vault share can be redeemed for.
+/// 5) If vault shares are represented using an ERC20 token, then the ERC20 token contract must be
+///    the vault contract itself.
 abstract contract Gate {
     /// -----------------------------------------------------------------------
     /// Library usage

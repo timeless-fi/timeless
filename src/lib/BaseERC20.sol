@@ -5,7 +5,11 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Gate} from "../Gate.sol";
 
-contract GateOwnedERC20 is ERC20 {
+/// @title BaseERC20
+/// @author zefram.eth
+/// @notice The base ERC20 contract used by PrincipalToken and PerpetualYieldToken
+/// @dev Uses the same number of decimals as the vault's underlying token
+contract BaseERC20 is ERC20 {
     error Error_NotGate();
 
     address public immutable gate;
