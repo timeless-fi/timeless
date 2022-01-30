@@ -380,6 +380,34 @@ abstract contract Gate {
             );
     }
 
+    function computeYieldPerToken(address vault)
+        external
+        view
+        virtual
+        returns (uint256)
+    {
+        return
+            _computeYieldPerToken(
+                vault,
+                getPerpetualYieldTokenForVault(vault),
+                pricePerVaultShareStored[vault]
+            );
+    }
+
+    function getUnderlyingOfVault(address vault)
+        public
+        view
+        virtual
+        returns (ERC20);
+
+    function getPricePerVaultShare(address vault)
+        public
+        view
+        virtual
+        returns (uint256);
+
+    function vaultSharesIsERC20() public pure virtual returns (bool);
+
     /// -----------------------------------------------------------------------
     /// PYT transfer hooks
     /// -----------------------------------------------------------------------
@@ -437,48 +465,6 @@ abstract contract Gate {
     }
 
     /// -----------------------------------------------------------------------
-    /// Abstract functions
-    /// -----------------------------------------------------------------------
-
-    function getUnderlyingOfVault(address vault)
-        public
-        view
-        virtual
-        returns (ERC20);
-
-    function getPricePerVaultShare(address vault)
-        public
-        view
-        virtual
-        returns (uint256);
-
-    function vaultSharesIsERC20() public pure virtual returns (bool);
-
-    function _depositIntoVault(
-        ERC20 underlying,
-        uint256 underlyingAmount,
-        address vault
-    ) internal virtual;
-
-    function _withdrawFromVault(
-        address recipient,
-        address vault,
-        uint256 underlyingAmount,
-        uint8 underlyingDecimals
-    ) internal virtual;
-
-    function _vaultSharesAmountToTokenPairAmount(
-        address vault,
-        uint256 vaultSharesAmount
-    ) internal view virtual returns (uint256);
-
-    function _computeYieldPerToken(
-        address vault,
-        PerpetualYieldToken pyt,
-        uint256 pricePerVaultShareStored_
-    ) internal view virtual returns (uint256);
-
-    /// -----------------------------------------------------------------------
     /// Internal utilities
     /// -----------------------------------------------------------------------
 
@@ -530,4 +516,28 @@ abstract contract Gate {
                 PRECISION
             ) + userAccruedYield[vault][user];
     }
+
+    function _depositIntoVault(
+        ERC20 underlying,
+        uint256 underlyingAmount,
+        address vault
+    ) internal virtual;
+
+    function _withdrawFromVault(
+        address recipient,
+        address vault,
+        uint256 underlyingAmount,
+        uint8 underlyingDecimals
+    ) internal virtual;
+
+    function _vaultSharesAmountToTokenPairAmount(
+        address vault,
+        uint256 vaultSharesAmount
+    ) internal view virtual returns (uint256);
+
+    function _computeYieldPerToken(
+        address vault,
+        PerpetualYieldToken pyt,
+        uint256 pricePerVaultShareStored_
+    ) internal view virtual returns (uint256);
 }

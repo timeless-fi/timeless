@@ -17,7 +17,7 @@ contract YearnGate is Gate {
     using SafeTransferLib for ERC20;
 
     /// -----------------------------------------------------------------------
-    /// Virtual functions
+    /// Getters
     /// -----------------------------------------------------------------------
 
     function getUnderlyingOfVault(address vault)
@@ -43,6 +43,10 @@ contract YearnGate is Gate {
     function vaultSharesIsERC20() public pure virtual override returns (bool) {
         return true;
     }
+
+    /// -----------------------------------------------------------------------
+    /// Internal utilities
+    /// -----------------------------------------------------------------------
 
     function _depositIntoVault(
         ERC20 underlying,
