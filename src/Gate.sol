@@ -30,29 +30,45 @@ abstract contract Gate {
     /// Constants
     /// -----------------------------------------------------------------------
 
+    /// @notice The precision used by PrincipalToken and PerpetualYieldToken
     uint256 internal constant PRECISION = 10**18;
 
     /// -----------------------------------------------------------------------
     /// Storage variables
     /// -----------------------------------------------------------------------
 
-    /// @notice vault => value
+    /// @notice The amount of underlying tokens each vault share is worth, at the time of the last update.
+    /// @dev vault => value
     mapping(address => uint256) public pricePerVaultShareStored;
 
-    /// @notice vault => value
+    /// @notice The amount of yield each PYT has accrued, at the time of the last update.
+    /// @dev vault => value
     mapping(address => uint256) public yieldPerTokenStored;
 
-    /// @notice vault => user => value
+    /// @notice The amount of yield each PYT has accrued, at the time when a user has last interacted
+    /// with the gate/PYT.
+    /// @dev vault => user => value
     mapping(address => mapping(address => uint256))
         public userYieldPerTokenStored;
 
-    /// @notice vault => user => value
+    /// @notice The amount of yield a user has accrued, at the time when they last interacted
+    /// with the gate/PYT (without calling claimYield()).
+    /// @dev vault => user => value
     mapping(address => mapping(address => uint256)) public userAccruedYield;
 
     /// -----------------------------------------------------------------------
     /// User actions
     /// -----------------------------------------------------------------------
 
+    /// @notice Converts underlying tokens into PrincipalToken and PerpetualYieldToken.
+    /// The amount of PT and PYT minted will be equal to the underlying token amount.
+    /// @dev The underlying tokens will be immediately deposited into the specified vault.
+    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// deploy them before proceeding, which will increase the gas cost significantly.
+    /// @param recipient The recipient of the minted PT and PYT
+    /// @param vault The vault to mint PT and PYT for
+    /// @param underlyingAmount The amount of underlying tokens to use
+    /// @return mintAmount The amount of PT and PYT minted (the amounts are equal)
     function enterWithUnderlying(
         address recipient,
         address vault,
@@ -102,6 +118,14 @@ abstract contract Gate {
         _depositIntoVault(underlying, underlyingAmount, vault);
     }
 
+    /// @notice Converts vault share tokens into PrincipalToken and PerpetualYieldToken.
+    /// @dev Only available if vault shares are transferrable ERC20 tokens.
+    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// deploy them before proceeding, which will increase the gas cost significantly.
+    /// @param recipient The recipient of the minted PT and PYT
+    /// @param vault The vault to mint PT and PYT for
+    /// @param vaultSharesAmount The amount of vault share tokens to use
+    /// @return mintAmount The amount of PT and PYT minted (the amounts are equal)
     function enterWithVaultShares(
         address recipient,
         address vault,
@@ -152,6 +176,15 @@ abstract contract Gate {
         );
     }
 
+    /// @notice Converts PrincipalToken and PerpetualYieldToken to underlying tokens.
+    /// The amount of PT and PYT burned will be equal to the underlying token amount.
+    /// @dev The underlying tokens will be immediately withdrawn from the specified vault.
+    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// revert.
+    /// @param recipient The recipient of the minted PT and PYT
+    /// @param vault The vault to mint PT and PYT for
+    /// @param underlyingAmount The amount of underlying tokens requested
+    /// @return burnAmount The amount of PT and PYT burned (the amounts are equal)
     function exitToUnderlying(
         address recipient,
         address vault,
@@ -196,6 +229,15 @@ abstract contract Gate {
         );
     }
 
+    /// @notice Converts PrincipalToken and PerpetualYieldToken to vault share tokens.
+    /// The amount of PT and PYT burned will be equal to the underlying token amount.
+    /// @dev Only available if vault shares are transferrable ERC20 tokens.
+    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// revert.
+    /// @param recipient The recipient of the minted PT and PYT
+    /// @param vault The vault to mint PT and PYT for
+    /// @param vaultSharesAmount The amount of vault share tokens requested
+    /// @return burnAmount The amount of PT and PYT burned (the amounts are equal)
     function exitToVaultShares(
         address recipient,
         address vault,
@@ -239,6 +281,11 @@ abstract contract Gate {
         ERC20(vault).safeTransfer(recipient, vaultSharesAmount);
     }
 
+    /// @notice Deploys the PrincipalToken and PerpetualYieldToken associated with a vault.
+    /// @dev Will revert if they have already been deployed.
+    /// @param vault The vault to deploy PT and PYT for
+    /// @return pt The deployed PrincipalToken
+    /// @return pyt The deployed PerpetualYieldToken
     function deployTokenPairForVault(address vault)
         public
         virtual
@@ -257,6 +304,10 @@ abstract contract Gate {
         );
     }
 
+    /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender.
+    /// @param recipient The recipient of the yield
+    /// @param vault The vault to claim yield from
+    /// @return yieldAmount The amount of yield claimed
     function claimYield(address recipient, address vault)
         external
         virtual
@@ -270,6 +321,10 @@ abstract contract Gate {
         if (address(pyt).code.length == 0) {
             revert Error_TokenPairNotDeployed();
         }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
 
         // accrue yield
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
@@ -292,6 +347,10 @@ abstract contract Gate {
         if (yieldAmount > 0) {
             userAccruedYield[vault][msg.sender] = 0;
 
+            /// -----------------------------------------------------------------------
+            /// Effects
+            /// -----------------------------------------------------------------------
+
             _withdrawFromVault(
                 recipient,
                 vault,
@@ -305,6 +364,10 @@ abstract contract Gate {
     /// Getters
     /// -----------------------------------------------------------------------
 
+    /// @notice Returns the PrincipalToken associated with a vault.
+    /// @dev Returns non-zero value even if the contract hasn't been deployed yet.
+    /// @param vault The vault to query
+    /// @return The PrincipalToken address
     function getPrincipalTokenForVault(address vault)
         public
         view
@@ -335,6 +398,10 @@ abstract contract Gate {
             );
     }
 
+    /// @notice Returns the PerpetualYieldToken associated with a vault.
+    /// @dev Returns non-zero value even if the contract hasn't been deployed yet.
+    /// @param vault The vault to query
+    /// @return The PerpetualYieldToken address
     function getPerpetualYieldTokenForVault(address vault)
         public
         view
@@ -365,6 +432,10 @@ abstract contract Gate {
             );
     }
 
+    /// @notice Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
+    /// @param vault The vault to query
+    /// @param user The PYT holder to query
+    /// @return The amount of yield claimable
     function getClaimableYieldAmount(address vault, address user)
         external
         view
@@ -380,6 +451,9 @@ abstract contract Gate {
             );
     }
 
+    /// @notice Computes the latest yieldPerToken value for a vault.
+    /// @param vault The vault to query
+    /// @return The latest yieldPerToken value
     function computeYieldPerToken(address vault)
         external
         view
@@ -394,24 +468,37 @@ abstract contract Gate {
             );
     }
 
+    /// @notice Returns the underlying token of a vault.
+    /// @param vault The vault to query
+    /// @return The underlying token
     function getUnderlyingOfVault(address vault)
         public
         view
         virtual
         returns (ERC20);
 
+    /// @notice Returns the amount of underlying tokens each share of a vault is worth.
+    /// @param vault The vault to query
+    /// @return The pricePerVaultShare value
     function getPricePerVaultShare(address vault)
         public
         view
         virtual
         returns (uint256);
 
+    /// @return True if the vaults supported by this gate use transferrable ERC20 tokens
+    /// to represent shares, false otherwise.
     function vaultSharesIsERC20() public pure virtual returns (bool);
 
     /// -----------------------------------------------------------------------
     /// PYT transfer hooks
     /// -----------------------------------------------------------------------
 
+    /// @notice SHOULD NOT BE CALLED BY USERS, ONLY CALLED BY PERPETUAL YIELD TOKEN CONTRACTS
+    /// @dev Called by PYT contracts deployed by this gate before each token transfer, in order to
+    /// accrue the yield earned by the from & to accounts
+    /// @param from The token transfer from account
+    /// @param to The token transfer to account
     function beforePerpetualYieldTokenTransfer(address from, address to)
         external
         virtual
@@ -468,6 +555,7 @@ abstract contract Gate {
     /// Internal utilities
     /// -----------------------------------------------------------------------
 
+    /// @dev Updates the yield earned globally and for a particular user.
     function _accrueYield(
         address vault,
         PerpetualYieldToken pyt,
@@ -503,6 +591,7 @@ abstract contract Gate {
         }
     }
 
+    /// @dev Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
     function _getClaimableYieldAmount(
         address vault,
         PerpetualYieldToken pyt,
@@ -517,12 +606,21 @@ abstract contract Gate {
             ) + userAccruedYield[vault][user];
     }
 
+    /// @dev Deposits underlying tokens into a vault
+    /// @param underlying The underlying token to deposit
+    /// @param underlyingAmount The amount of tokens to deposit
+    /// @param vault The vault to deposit into
     function _depositIntoVault(
         ERC20 underlying,
         uint256 underlyingAmount,
         address vault
     ) internal virtual;
 
+    /// @dev Withdraws underlying tokens from a vault
+    /// @param recipient The recipient of the underlying tokens
+    /// @param vault The vault to withdraw from
+    /// @param underlyingAmount The amount of tokens to withdraw
+    /// @param underlyingDecimals The number of decimals used by the underlying token
     function _withdrawFromVault(
         address recipient,
         address vault,
@@ -530,11 +628,13 @@ abstract contract Gate {
         uint8 underlyingDecimals
     ) internal virtual;
 
+    /// @dev Converts a vault share amount into an equivalent PYT/PT amount
     function _vaultSharesAmountToTokenPairAmount(
         address vault,
         uint256 vaultSharesAmount
     ) internal view virtual returns (uint256);
 
+    /// @dev Computes the latest yieldPerToken value for a vault.
     function _computeYieldPerToken(
         address vault,
         PerpetualYieldToken pyt,

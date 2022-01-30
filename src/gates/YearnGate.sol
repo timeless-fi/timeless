@@ -20,6 +20,7 @@ contract YearnGate is Gate {
     /// Getters
     /// -----------------------------------------------------------------------
 
+    /// @inheritdoc Gate
     function getUnderlyingOfVault(address vault)
         public
         view
@@ -30,6 +31,7 @@ contract YearnGate is Gate {
         return ERC20(YearnVault(vault).token());
     }
 
+    /// @inheritdoc Gate
     function getPricePerVaultShare(address vault)
         public
         view
@@ -40,6 +42,7 @@ contract YearnGate is Gate {
         return YearnVault(vault).pricePerShare();
     }
 
+    /// @inheritdoc Gate
     function vaultSharesIsERC20() public pure virtual override returns (bool) {
         return true;
     }
@@ -48,6 +51,7 @@ contract YearnGate is Gate {
     /// Internal utilities
     /// -----------------------------------------------------------------------
 
+    /// @inheritdoc Gate
     function _depositIntoVault(
         ERC20 underlying,
         uint256 underlyingAmount,
@@ -60,6 +64,7 @@ contract YearnGate is Gate {
         YearnVault(vault).deposit(underlyingAmount);
     }
 
+    /// @inheritdoc Gate
     function _withdrawFromVault(
         address recipient,
         address vault,
@@ -74,6 +79,7 @@ contract YearnGate is Gate {
         YearnVault(vault).withdraw(shareAmount, recipient);
     }
 
+    /// @inheritdoc Gate
     function _vaultSharesAmountToTokenPairAmount(
         address vault,
         uint256 vaultSharesAmount
@@ -86,6 +92,7 @@ contract YearnGate is Gate {
             );
     }
 
+    /// @inheritdoc Gate
     function _computeYieldPerToken(
         address vault,
         PerpetualYieldToken pyt,
