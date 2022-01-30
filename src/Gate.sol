@@ -42,6 +42,7 @@ abstract contract Gate {
     mapping(address => uint256) public pricePerVaultShareStored;
 
     /// @notice The amount of yield each PYT has accrued, at the time of the last update.
+    /// Scaled by PRECISION.
     /// @dev vault => value
     mapping(address => uint256) public yieldPerTokenStored;
 
@@ -86,20 +87,17 @@ abstract contract Gate {
             deployTokenPairForVault(vault);
         }
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        ERC20 underlying = getUnderlyingOfVault(vault);
+        uint8 underlyingDecimals = pt.decimals();
 
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender);
+        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
 
         // mint PTs and PYTs
-        mintAmount = _underlyingAmountToTokenPairAmount(
-            underlyingAmount,
-            underlying.decimals()
-        );
+        mintAmount = underlyingAmount;
         pt.gateMint(recipient, mintAmount);
         pyt.gateMint(recipient, mintAmount);
 
@@ -108,6 +106,7 @@ abstract contract Gate {
         /// -----------------------------------------------------------------------
 
         // transfer underlying from msg.sender to address(this)
+        ERC20 underlying = getUnderlyingOfVault(vault);
         underlying.safeTransferFrom(
             msg.sender,
             address(this),
@@ -141,25 +140,27 @@ abstract contract Gate {
         }
 
         PrincipalToken pt = getPrincipalTokenForVault(vault);
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         if (address(pt).code.length == 0) {
             // token pair hasn't been deployed yet
             // do the deployment now
             // only need to check pt since pt and pyt are always deployed in pairs
             deployTokenPairForVault(vault);
         }
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        uint8 underlyingDecimals = pt.decimals();
 
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender);
+        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
 
         // mint PTs and PYTs
         mintAmount = _vaultSharesAmountToTokenPairAmount(
             vault,
-            vaultSharesAmount
+            vaultSharesAmount,
+            underlyingDecimals
         );
         pt.gateMint(recipient, mintAmount);
         pyt.gateMint(recipient, mintAmount);
@@ -204,15 +205,13 @@ abstract contract Gate {
         /// State updates
         /// -----------------------------------------------------------------------
 
+        uint8 underlyingDecimals = pt.decimals();
+
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender);
+        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
 
         // burn PTs and PYTs
-        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
-        burnAmount = _underlyingAmountToTokenPairAmount(
-            underlyingAmount,
-            underlyingDecimals
-        );
+        burnAmount = underlyingAmount;
         pt.gateBurn(msg.sender, burnAmount);
         pyt.gateBurn(msg.sender, burnAmount);
 
@@ -262,13 +261,16 @@ abstract contract Gate {
         /// State updates
         /// -----------------------------------------------------------------------
 
+        uint8 underlyingDecimals = pt.decimals();
+
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender);
+        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
 
         // burn PTs and PYTs
         burnAmount = _vaultSharesAmountToTokenPairAmount(
             vault,
-            vaultSharesAmount
+            vaultSharesAmount,
+            underlyingDecimals
         );
         pt.gateBurn(msg.sender, burnAmount);
         pyt.gateBurn(msg.sender, burnAmount);
@@ -326,21 +328,24 @@ abstract contract Gate {
         /// State updates
         /// -----------------------------------------------------------------------
 
+        uint8 underlyingDecimals = pyt.decimals();
+
         // accrue yield
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
             pyt,
-            updatedPricePerVaultShare
+            updatedPricePerVaultShare,
+            underlyingDecimals
         );
-        yieldPerTokenStored[vault] = updatedYieldPerToken;
         yieldAmount = _getClaimableYieldAmount(
             vault,
             pyt,
             msg.sender,
             updatedYieldPerToken
         );
+        yieldPerTokenStored[vault] = updatedYieldPerToken;
+        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken;
 
         // withdraw yield
@@ -355,7 +360,7 @@ abstract contract Gate {
                 recipient,
                 vault,
                 yieldAmount,
-                getUnderlyingOfVault(vault).decimals()
+                underlyingDecimals
             );
         }
     }
@@ -424,7 +429,11 @@ abstract contract Gate {
                                 // Deployment bytecode:
                                 type(PerpetualYieldToken).creationCode,
                                 // Constructor arguments:
-                                abi.encode(address(this), vault)
+                                abi.encode(
+                                    address(this),
+                                    vault,
+                                    getUnderlyingOfVault(vault).decimals()
+                                )
                             )
                         )
                     )
@@ -442,12 +451,18 @@ abstract contract Gate {
         virtual
         returns (uint256)
     {
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         return
             _getClaimableYieldAmount(
                 vault,
-                getPerpetualYieldTokenForVault(vault),
+                pyt,
                 user,
-                yieldPerTokenStored[vault]
+                _computeYieldPerToken(
+                    vault,
+                    pyt,
+                    getPricePerVaultShare(vault),
+                    pyt.decimals()
+                )
             );
     }
 
@@ -460,11 +475,13 @@ abstract contract Gate {
         virtual
         returns (uint256)
     {
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         return
             _computeYieldPerToken(
                 vault,
-                getPerpetualYieldTokenForVault(vault),
-                pricePerVaultShareStored[vault]
+                pyt,
+                getPricePerVaultShare(vault),
+                pyt.decimals()
             );
     }
 
@@ -481,6 +498,15 @@ abstract contract Gate {
     /// @param vault The vault to query
     /// @return The pricePerVaultShare value
     function getPricePerVaultShare(address vault)
+        public
+        view
+        virtual
+        returns (uint256);
+
+    /// @notice Returns the amount of vault shares owned by the gate.
+    /// @param vault The vault to query
+    /// @return The gate's vault share balance
+    function getVaultShareBalance(address vault)
         public
         view
         virtual
@@ -519,13 +545,14 @@ abstract contract Gate {
 
         // accrue yield
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
             pyt,
-            updatedPricePerVaultShare
+            updatedPricePerVaultShare,
+            pyt.decimals()
         );
         yieldPerTokenStored[vault] = updatedYieldPerToken;
+        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
 
         // we know the from account must have held PYTs before
         // so we will always accrue the yield earned by the from account
@@ -559,36 +586,25 @@ abstract contract Gate {
     function _accrueYield(
         address vault,
         PerpetualYieldToken pyt,
-        address user
+        address user,
+        uint8 underlyingDecimals
     ) internal virtual {
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
             pyt,
-            updatedPricePerVaultShare
+            updatedPricePerVaultShare,
+            underlyingDecimals
         );
-        yieldPerTokenStored[vault] = updatedYieldPerToken;
         userAccruedYield[vault][user] = _getClaimableYieldAmount(
             vault,
             pyt,
-            user,
+            msg.sender,
             updatedYieldPerToken
         );
-        userYieldPerTokenStored[vault][user] = updatedYieldPerToken;
-    }
-
-    function _underlyingAmountToTokenPairAmount(
-        uint256 underlyingAmount,
-        uint8 underlyingDecimals
-    ) internal pure virtual returns (uint256) {
-        if (underlyingDecimals == 18) {
-            return underlyingAmount;
-        } else if (underlyingDecimals < 18) {
-            return underlyingAmount * (10**(18 - underlyingDecimals));
-        } else {
-            return underlyingAmount / (10**(underlyingDecimals - 18));
-        }
+        yieldPerTokenStored[vault] = updatedYieldPerToken;
+        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
+        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken;
     }
 
     /// @dev Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
@@ -596,12 +612,12 @@ abstract contract Gate {
         address vault,
         PerpetualYieldToken pyt,
         address user,
-        uint256 yieldPerTokenStored_
+        uint256 updatedYieldPerToken
     ) internal view virtual returns (uint256) {
         return
             FullMath.mulDiv(
                 pyt.balanceOf(user),
-                yieldPerTokenStored_ - userYieldPerTokenStored[vault][user],
+                updatedYieldPerToken - userYieldPerTokenStored[vault][user],
                 PRECISION
             ) + userAccruedYield[vault][user];
     }
@@ -631,13 +647,15 @@ abstract contract Gate {
     /// @dev Converts a vault share amount into an equivalent PYT/PT amount
     function _vaultSharesAmountToTokenPairAmount(
         address vault,
-        uint256 vaultSharesAmount
+        uint256 vaultSharesAmount,
+        uint8 underlyingDecimals
     ) internal view virtual returns (uint256);
 
     /// @dev Computes the latest yieldPerToken value for a vault.
     function _computeYieldPerToken(
         address vault,
         PerpetualYieldToken pyt,
-        uint256 pricePerVaultShareStored_
+        uint256 updatedPricePerVaultShare,
+        uint8 underlyingDecimals
     ) internal view virtual returns (uint256);
 }

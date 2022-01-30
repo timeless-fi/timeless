@@ -3,6 +3,8 @@ pragma solidity ^0.8.4;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
+import {Gate} from "../Gate.sol";
+
 contract GateOwnedERC20 is ERC20 {
     error Error_NotGate();
 
@@ -10,11 +12,17 @@ contract GateOwnedERC20 is ERC20 {
     address public immutable vault;
 
     constructor(
-        string memory name,
-        string memory symbol,
+        string memory name_,
+        string memory symbol_,
         address gate_,
         address vault_
-    ) ERC20(name, symbol, 18) {
+    )
+        ERC20(
+            name_,
+            symbol_,
+            Gate(gate_).getUnderlyingOfVault(vault_).decimals()
+        )
+    {
         gate = gate_;
         vault = vault_;
     }

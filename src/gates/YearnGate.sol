@@ -42,6 +42,16 @@ contract YearnGate is Gate {
         return YearnVault(vault).pricePerShare();
     }
 
+    function getVaultShareBalance(address vault)
+        public
+        view
+        virtual
+        override
+        returns (uint256)
+    {
+        return YearnVault(vault).balanceOf(address(this));
+    }
+
     /// @inheritdoc Gate
     function vaultSharesIsERC20() public pure virtual override returns (bool) {
         return true;
@@ -82,13 +92,14 @@ contract YearnGate is Gate {
     /// @inheritdoc Gate
     function _vaultSharesAmountToTokenPairAmount(
         address vault,
-        uint256 vaultSharesAmount
+        uint256 vaultSharesAmount,
+        uint8 underlyingDecimals
     ) internal view virtual override returns (uint256) {
         return
             FullMath.mulDiv(
                 vaultSharesAmount,
                 getPricePerVaultShare(vault),
-                10**YearnVault(vault).decimals()
+                10**underlyingDecimals
             );
     }
 
@@ -96,16 +107,17 @@ contract YearnGate is Gate {
     function _computeYieldPerToken(
         address vault,
         PerpetualYieldToken pyt,
-        uint256 pricePerVaultShareStored_
+        uint256 updatedPricePerVaultShare,
+        uint8 underlyingDecimals
     ) internal view virtual override returns (uint256) {
         uint256 pytTotalSupply = pyt.totalSupply();
         if (pytTotalSupply == 0) {
             return yieldPerTokenStored[vault];
         }
         uint256 newYieldAccrued = FullMath.mulDiv(
-            (getPricePerVaultShare(vault) - pricePerVaultShareStored_),
-            YearnVault(vault).balanceOf(address(this)),
-            10**YearnVault(vault).decimals()
+            (updatedPricePerVaultShare - pricePerVaultShareStored[vault]),
+            getVaultShareBalance(vault),
+            10**underlyingDecimals
         );
         return
             yieldPerTokenStored[vault] +
