@@ -16,6 +16,7 @@ contract YearnGateTest is BaseTest {
 
     YearnGate internal gate;
     address internal constant tester = address(0x69);
+    address internal constant recipient = address(0xbeef);
     address internal constant initialDepositor = address(0x420);
 
     /// -----------------------------------------------------------------------
@@ -31,7 +32,6 @@ contract YearnGateTest is BaseTest {
     /// -----------------------------------------------------------------------
 
     function test_enterWithUnderlying(
-        address recipient,
         uint8 underlyingDecimals,
         uint192 initialUnderlyingAmount,
         uint192 initialYieldAmount,
@@ -90,7 +90,6 @@ contract YearnGateTest is BaseTest {
     }
 
     function test_enterWithVaultShares(
-        address recipient,
         uint8 underlyingDecimals,
         uint192 initialUnderlyingAmount,
         uint192 initialYieldAmount,
@@ -160,18 +159,86 @@ contract YearnGateTest is BaseTest {
         );
     }
 
-    function test_exitToUnderlying(address recipient, uint256 underlyingAmount)
-        public
-    {}
+    function test_exitToUnderlying(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount
+    ) public {
+        vm.startPrank(tester);
 
-    function test_exitToVaultShares(
-        address recipient,
-        uint256 vaultSharesAmount
-    ) public {}
+        if (underlyingDecimals > 18) {
+            // crazy stupid token, why would you do this
+            underlyingDecimals = 18;
+        }
+
+        if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
+            // don't give tester free yield
+            initialUnderlyingAmount = initialYieldAmount;
+        }
+
+        (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(tester, address(vault), underlyingAmount);
+
+        // mint additional yield to the vault
+        underlying.mint(address(vault), additionalYieldAmount);
+
+        // exit
+        uint256 burnAmount = gate.exitToUnderlying(
+            recipient,
+            address(vault),
+            underlyingAmount
+        );
+
+        // check balances
+        uint256 epsilonInv = 10**52;
+        // underlying transferred to tester
+        assertEqDecimalEpsilonBelow(
+            underlying.balanceOf(recipient),
+            underlyingAmount,
+            underlyingDecimals,
+            epsilonInv
+        );
+        // recipient burnt PT and PYT
+        PrincipalToken pt = gate.getPrincipalTokenForVault(address(vault));
+        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(
+            address(vault)
+        );
+        assertEqDecimalEpsilonBelow(
+            pt.balanceOf(recipient),
+            0,
+            underlyingDecimals,
+            epsilonInv
+        );
+        assertEqDecimalEpsilonBelow(
+            pyt.balanceOf(recipient),
+            0,
+            underlyingDecimals,
+            epsilonInv
+        );
+        assertEqDecimalEpsilonBelow(
+            burnAmount,
+            underlyingAmount,
+            underlyingDecimals,
+            epsilonInv
+        );
+    }
+
+    function test_exitToVaultShares(uint256 vaultSharesAmount) public {}
 
     function test_deployTokenPairForVault() public {}
 
-    function test_claimYield(address recipient) public {}
+    function test_claimYield() public {}
 
     /// -----------------------------------------------------------------------
     /// Internal utilities
