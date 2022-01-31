@@ -17,6 +17,7 @@ contract YearnGateTest is BaseTest {
 
     YearnGate internal gate;
     address internal constant tester = address(0x69);
+    address internal constant tester1 = address(0xabcd);
     address internal constant recipient = address(0xbeef);
     address internal constant initialDepositor = address(0x420);
 
@@ -40,10 +41,8 @@ contract YearnGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        if (underlyingDecimals > 18) {
-            // crazy stupid token, why would you do this
-            underlyingDecimals %= 19;
-        }
+        // bound between 0 and 18
+        underlyingDecimals %= 19;
 
         (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
             underlyingDecimals,
@@ -98,10 +97,8 @@ contract YearnGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        if (underlyingDecimals > 18) {
-            // crazy stupid token, why would you do this
-            underlyingDecimals %= 19;
-        }
+        // bound between 0 and 18
+        underlyingDecimals %= 19;
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
             // don't give tester free yield
@@ -169,10 +166,8 @@ contract YearnGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        if (underlyingDecimals > 18) {
-            // crazy stupid token, why would you do this
-            underlyingDecimals %= 19;
-        }
+        // bound between 0 and 18
+        underlyingDecimals %= 19;
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
             // don't give tester free yield
@@ -244,10 +239,8 @@ contract YearnGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        if (underlyingDecimals > 18) {
-            // crazy stupid token, why would you do this
-            underlyingDecimals %= 19;
-        }
+        // bound between 0 and 18
+        underlyingDecimals %= 19;
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
             // don't give tester free yield
@@ -316,10 +309,8 @@ contract YearnGateTest is BaseTest {
     }
 
     function test_deployTokenPairForVault(uint8 underlyingDecimals) public {
-        if (underlyingDecimals > 18) {
-            // crazy stupid token, why would you do this
-            underlyingDecimals %= 19;
-        }
+        // bound between 0 and 18
+        underlyingDecimals %= 19;
 
         TestERC20 underlying = new TestERC20(underlyingDecimals);
         TestYearnVault vault = new TestYearnVault(underlying);
@@ -349,10 +340,8 @@ contract YearnGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        if (underlyingDecimals > 18) {
-            // crazy stupid token, why would you do this
-            underlyingDecimals %= 19;
-        }
+        // bound between 0 and 18
+        underlyingDecimals %= 19;
 
         (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
             underlyingDecimals,
@@ -369,16 +358,18 @@ contract YearnGateTest is BaseTest {
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
         // of its pricePerShare. namely, the yield should be at least the current amount of underlying
-        // times (1 / 10**underlyingDecimals).
-        uint192 minYieldAmount = uint192(
-            (uint256(underlyingAmount) +
-                uint256(initialUnderlyingAmount) +
-                uint256(initialYieldAmount)) / 10**underlyingDecimals
-        );
-        if (additionalYieldAmount < minYieldAmount) {
-            additionalYieldAmount = minYieldAmount;
+        // times (1 / pricePerShare).
+        {
+            uint192 minYieldAmount = uint192(
+                (uint256(underlyingAmount) +
+                    uint256(initialUnderlyingAmount) +
+                    uint256(initialYieldAmount)) /
+                    gate.getPricePerVaultShare(address(vault))
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
         }
-
         uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(
             address(vault)
         );
@@ -396,7 +387,7 @@ contract YearnGateTest is BaseTest {
             afterPricePerVaultShare - beforePricePerVaultShare,
             beforePricePerVaultShare
         );
-        uint256 epsilonInv = 10**15;
+        uint256 epsilonInv = 10**10;
         assertEqDecimalEpsilonBelow(
             claimedYield,
             expectedYield,
@@ -406,6 +397,424 @@ contract YearnGateTest is BaseTest {
         assertEqDecimalEpsilonBelow(
             underlying.balanceOf(recipient),
             claimedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+    }
+
+    function test_transferPYT_toUninitializedAccount(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount,
+        uint8 pytTransferPercent
+    ) public {
+        vm.startPrank(tester);
+
+        // bound between 3 and 18
+        underlyingDecimals %= 16;
+        underlyingDecimals += 3;
+
+        // bound the initial yield below 100x the initial underlying
+        initialYieldAmount = uint192(
+            initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+        );
+
+        // bound between 1 and 99
+        pytTransferPercent %= 99;
+        pytTransferPercent += 1;
+
+        (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(tester, address(vault), underlyingAmount);
+
+        // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / pricePerShare).
+        {
+            uint192 minYieldAmount = uint192(
+                (uint256(underlyingAmount) +
+                    uint256(initialUnderlyingAmount) +
+                    uint256(initialYieldAmount)) /
+                    gate.getPricePerVaultShare(address(vault))
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
+        }
+
+        uint256 expectedYield;
+        {
+            uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(
+                address(vault)
+            );
+            underlying.mint(address(vault), additionalYieldAmount);
+            expectedYield = FullMath.mulDiv(
+                underlyingAmount,
+                gate.getPricePerVaultShare(address(vault)) -
+                    beforePricePerVaultShare,
+                beforePricePerVaultShare
+            );
+        }
+
+        // transfer PYT to tester1
+        gate.getPerpetualYieldTokenForVault(address(vault)).transfer(
+            tester1,
+            FullMath.mulDiv(underlyingAmount, pytTransferPercent, 100)
+        );
+
+        // claim yield as tester
+        uint256 testerClaimedYield = gate.claimYield(recipient, address(vault));
+
+        // tester should've received all the yield
+        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        assertEqDecimalEpsilonBelow(
+            testerClaimedYield,
+            expectedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+
+        // claim yield as tester1
+        // should have received 0
+        epsilonInv = 10**(underlyingDecimals - 2);
+        vm.stopPrank();
+        vm.startPrank(tester1);
+        assertLeDecimal(
+            gate.claimYield(tester1, address(vault)),
+            testerClaimedYield / epsilonInv,
+            underlyingDecimals
+        );
+    }
+
+    function test_transferPYT_toInitializedAccount(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount,
+        uint8 pytTransferPercent
+    ) public {
+        vm.startPrank(tester);
+
+        // bound between 3 and 18
+        underlyingDecimals %= 16;
+        underlyingDecimals += 3;
+
+        // bound the initial yield below 10x the initial underlying
+        initialYieldAmount = uint192(
+            initialYieldAmount % (uint256(initialUnderlyingAmount) * 10)
+        );
+
+        // bound between 1 and 99
+        pytTransferPercent %= 99;
+        pytTransferPercent += 1;
+
+        (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // enter
+        underlying.mint(tester, underlyingAmount);
+        gate.enterWithUnderlying(tester, address(vault), underlyingAmount);
+
+        // switch to tester1
+        vm.stopPrank();
+        vm.startPrank(tester1);
+
+        // enter
+        underlying.mint(tester1, underlyingAmount);
+        underlying.approve(address(gate), type(uint256).max);
+        gate.enterWithUnderlying(tester1, address(vault), underlyingAmount);
+
+        // switch to tester
+        vm.stopPrank();
+        vm.startPrank(tester);
+
+        // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / pricePerShare).
+        {
+            uint192 minYieldAmount = uint192(
+                (uint256(underlyingAmount) +
+                    uint256(initialUnderlyingAmount) +
+                    uint256(initialYieldAmount)) /
+                    gate.getPricePerVaultShare(address(vault))
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
+        }
+
+        uint256 expectedYield;
+        {
+            uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(
+                address(vault)
+            );
+            underlying.mint(address(vault), additionalYieldAmount);
+            expectedYield = FullMath.mulDiv(
+                underlyingAmount,
+                gate.getPricePerVaultShare(address(vault)) -
+                    beforePricePerVaultShare,
+                beforePricePerVaultShare
+            );
+        }
+
+        // transfer PYT to tester1
+        gate.getPerpetualYieldTokenForVault(address(vault)).transfer(
+            tester1,
+            FullMath.mulDiv(underlyingAmount, pytTransferPercent, 100)
+        );
+
+        // claim yield as tester
+        uint256 testerClaimedYield = gate.claimYield(recipient, address(vault));
+
+        // tester should've received the correct amount of yield
+        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        assertEqDecimalEpsilonAround(
+            testerClaimedYield,
+            expectedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+
+        // claim yield as tester1
+        // should've received the correct amount of yield
+        vm.stopPrank();
+        vm.startPrank(tester1);
+        assertEqDecimalEpsilonAround(
+            gate.claimYield(tester1, address(vault)),
+            expectedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+    }
+
+    function test_transferFromPYT_toUninitializedAccount(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount,
+        uint8 pytTransferPercent
+    ) public {
+        vm.startPrank(tester);
+
+        // bound between 3 and 18
+        underlyingDecimals %= 16;
+        underlyingDecimals += 3;
+
+        // bound the initial yield below 100x the initial underlying
+        initialYieldAmount = uint192(
+            initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+        );
+
+        // bound between 1 and 99
+        pytTransferPercent %= 99;
+        pytTransferPercent += 1;
+
+        (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(tester, address(vault), underlyingAmount);
+
+        // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / pricePerShare).
+        {
+            uint192 minYieldAmount = uint192(
+                (uint256(underlyingAmount) +
+                    uint256(initialUnderlyingAmount) +
+                    uint256(initialYieldAmount)) /
+                    gate.getPricePerVaultShare(address(vault))
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
+        }
+
+        uint256 expectedYield;
+        {
+            uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(
+                address(vault)
+            );
+            underlying.mint(address(vault), additionalYieldAmount);
+            expectedYield = FullMath.mulDiv(
+                underlyingAmount,
+                gate.getPricePerVaultShare(address(vault)) -
+                    beforePricePerVaultShare,
+                beforePricePerVaultShare
+            );
+        }
+
+        // give tester1 PYT approval
+        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(
+            address(vault)
+        );
+        pyt.approve(tester1, type(uint256).max);
+
+        // transfer PYT from tester to tester1, as tester1
+        vm.prank(tester1);
+        pyt.transferFrom(
+            tester,
+            tester1,
+            FullMath.mulDiv(underlyingAmount, pytTransferPercent, 100)
+        );
+
+        // claim yield as tester
+        uint256 testerClaimedYield = gate.claimYield(recipient, address(vault));
+
+        // tester should've received all the yield
+        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        assertEqDecimalEpsilonBelow(
+            testerClaimedYield,
+            expectedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+
+        // claim yield as tester1
+        // should have received 0
+        epsilonInv = 10**(underlyingDecimals - 2);
+        vm.stopPrank();
+        vm.startPrank(tester1);
+        assertLeDecimal(
+            gate.claimYield(tester1, address(vault)),
+            testerClaimedYield / epsilonInv,
+            underlyingDecimals
+        );
+    }
+
+    function test_transferFromPYT_toInitializedAccount(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount,
+        uint8 pytTransferPercent
+    ) public {
+        vm.startPrank(tester);
+
+        // bound between 3 and 18
+        underlyingDecimals %= 16;
+        underlyingDecimals += 3;
+
+        // bound the initial yield below 10x the initial underlying
+        initialYieldAmount = uint192(
+            initialYieldAmount % (uint256(initialUnderlyingAmount) * 10)
+        );
+
+        // bound between 1 and 99
+        pytTransferPercent %= 99;
+        pytTransferPercent += 1;
+
+        (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // enter
+        underlying.mint(tester, underlyingAmount);
+        gate.enterWithUnderlying(tester, address(vault), underlyingAmount);
+
+        // switch to tester1
+        vm.stopPrank();
+        vm.startPrank(tester1);
+
+        // enter
+        underlying.mint(tester1, underlyingAmount);
+        underlying.approve(address(gate), type(uint256).max);
+        gate.enterWithUnderlying(tester1, address(vault), underlyingAmount);
+
+        // switch to tester
+        vm.stopPrank();
+        vm.startPrank(tester);
+
+        // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / pricePerShare).
+        {
+            uint192 minYieldAmount = uint192(
+                (uint256(underlyingAmount) +
+                    uint256(initialUnderlyingAmount) +
+                    uint256(initialYieldAmount)) /
+                    gate.getPricePerVaultShare(address(vault))
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
+        }
+
+        uint256 expectedYield;
+        {
+            uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(
+                address(vault)
+            );
+            underlying.mint(address(vault), additionalYieldAmount);
+            expectedYield = FullMath.mulDiv(
+                underlyingAmount,
+                gate.getPricePerVaultShare(address(vault)) -
+                    beforePricePerVaultShare,
+                beforePricePerVaultShare
+            );
+        }
+
+        // give tester1 PYT approval
+        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(
+            address(vault)
+        );
+        pyt.approve(tester1, type(uint256).max);
+
+        // transfer PYT from tester to tester1, as tester1
+        vm.prank(tester1);
+        pyt.transferFrom(
+            tester,
+            tester1,
+            FullMath.mulDiv(underlyingAmount, pytTransferPercent, 100)
+        );
+
+        // claim yield as tester
+        uint256 testerClaimedYield = gate.claimYield(recipient, address(vault));
+
+        // tester should've received the correct amount of yield
+        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        assertEqDecimalEpsilonAround(
+            testerClaimedYield,
+            expectedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+
+        // claim yield as tester1
+        // should've received the correct amount of yield
+        vm.stopPrank();
+        vm.startPrank(tester1);
+        assertEqDecimalEpsilonAround(
+            gate.claimYield(tester1, address(vault)),
+            expectedYield,
             underlyingDecimals,
             epsilonInv
         );
