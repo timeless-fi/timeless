@@ -42,7 +42,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals %= 18;
+            underlyingDecimals %= 19;
         }
 
         (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
@@ -100,7 +100,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals %= 18;
+            underlyingDecimals %= 19;
         }
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
@@ -171,7 +171,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals %= 18;
+            underlyingDecimals %= 19;
         }
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
@@ -246,7 +246,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals %= 18;
+            underlyingDecimals %= 19;
         }
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
@@ -318,7 +318,7 @@ contract YearnGateTest is BaseTest {
     function test_deployTokenPairForVault(uint8 underlyingDecimals) public {
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals %= 18;
+            underlyingDecimals %= 19;
         }
 
         TestERC20 underlying = new TestERC20(underlyingDecimals);
@@ -340,7 +340,76 @@ contract YearnGateTest is BaseTest {
         assertEq(pyt.totalSupply(), 0);
     }
 
-    function test_claimYield() public {}
+    function test_claimYield(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount
+    ) public {
+        vm.startPrank(tester);
+
+        if (underlyingDecimals > 18) {
+            // crazy stupid token, why would you do this
+            underlyingDecimals %= 19;
+        }
+
+        (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(tester, address(vault), underlyingAmount);
+
+        // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / 10**underlyingDecimals).
+        uint192 minYieldAmount = uint192(
+            (uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount)) / 10**underlyingDecimals
+        );
+        if (additionalYieldAmount < minYieldAmount) {
+            additionalYieldAmount = minYieldAmount;
+        }
+
+        uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(
+            address(vault)
+        );
+        underlying.mint(address(vault), additionalYieldAmount);
+        uint256 afterPricePerVaultShare = gate.getPricePerVaultShare(
+            address(vault)
+        );
+
+        // claim yield
+        uint256 claimedYield = gate.claimYield(recipient, address(vault));
+
+        // check received yield
+        uint256 expectedYield = FullMath.mulDiv(
+            underlyingAmount,
+            afterPricePerVaultShare - beforePricePerVaultShare,
+            beforePricePerVaultShare
+        );
+        uint256 epsilonInv = 10**15;
+        assertEqDecimalEpsilonBelow(
+            claimedYield,
+            expectedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+        assertEqDecimalEpsilonBelow(
+            underlying.balanceOf(recipient),
+            claimedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+    }
 
     /// -----------------------------------------------------------------------
     /// Internal utilities

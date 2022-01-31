@@ -47,7 +47,7 @@ abstract contract Gate {
     /// Constants
     /// -----------------------------------------------------------------------
 
-    /// @notice The precision used by PrincipalToken and PerpetualYieldToken
+    /// @notice The precision used by yieldPerTokenStored
     uint256 internal constant PRECISION = 10**18;
 
     /// -----------------------------------------------------------------------
@@ -64,8 +64,9 @@ abstract contract Gate {
     mapping(address => uint256) public yieldPerTokenStored;
 
     /// @notice The amount of yield each PYT has accrued, at the time when a user has last interacted
-    /// with the gate/PYT.
+    /// with the gate/PYT. Shifted by 1, so e.g. 3 represents 2, 10 represents 9.
     /// @dev vault => user => value
+    /// The value is shifted to use 0 for representing uninitialized users.
     mapping(address => mapping(address => uint256))
         public userYieldPerTokenStored;
 
@@ -115,7 +116,7 @@ abstract contract Gate {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
+        _accrueYield(vault, pyt, recipient, underlyingDecimals);
 
         // mint PTs and PYTs
         mintAmount = underlyingAmount;
@@ -179,7 +180,7 @@ abstract contract Gate {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
+        _accrueYield(vault, pyt, recipient, underlyingDecimals);
 
         // mint PTs and PYTs
         mintAmount = _vaultSharesAmountToTokenPairAmount(
@@ -385,7 +386,7 @@ abstract contract Gate {
         }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
-        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken;
+        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
 
         // withdraw yield
         if (yieldAmount > 0) {
@@ -604,7 +605,7 @@ abstract contract Gate {
             updatedYieldPerToken,
             userYieldPerTokenStored[vault][from]
         );
-        userYieldPerTokenStored[vault][from] = updatedYieldPerToken;
+        userYieldPerTokenStored[vault][from] = updatedYieldPerToken + 1;
 
         // the to account might not have held PYTs before
         // we only accrue yield if they have
@@ -619,7 +620,7 @@ abstract contract Gate {
                 toUserYieldPerTokenStored
             );
         }
-        userYieldPerTokenStored[vault][to] = updatedYieldPerToken;
+        userYieldPerTokenStored[vault][to] = updatedYieldPerToken + 1;
     }
 
     /// -----------------------------------------------------------------------
@@ -652,7 +653,7 @@ abstract contract Gate {
         }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
-        userYieldPerTokenStored[vault][user] = updatedYieldPerToken;
+        userYieldPerTokenStored[vault][user] = updatedYieldPerToken + 1;
     }
 
     /// @dev Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
@@ -666,7 +667,7 @@ abstract contract Gate {
         return
             FullMath.mulDiv(
                 pyt.balanceOf(user),
-                updatedYieldPerToken - userYieldPerTokenStored_,
+                updatedYieldPerToken - (userYieldPerTokenStored_ - 1),
                 PRECISION
             ) + userAccruedYield[vault][user];
     }
