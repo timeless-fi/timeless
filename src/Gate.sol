@@ -96,6 +96,10 @@ abstract contract Gate {
         /// Validation
         /// -----------------------------------------------------------------------
 
+        if (underlyingAmount == 0) {
+            return 0;
+        }
+
         PrincipalToken pt = getPrincipalTokenForVault(vault);
         if (address(pt).code.length == 0) {
             // token pair hasn't been deployed yet
@@ -150,6 +154,10 @@ abstract contract Gate {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
+
+        if (vaultSharesAmount == 0) {
+            return 0;
+        }
 
         // only supported if vault shares are ERC20
         if (!vaultSharesIsERC20()) {
@@ -212,6 +220,10 @@ abstract contract Gate {
         /// Validation
         /// -----------------------------------------------------------------------
 
+        if (underlyingAmount == 0) {
+            return 0;
+        }
+
         PrincipalToken pt = getPrincipalTokenForVault(vault);
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         if (address(pt).code.length == 0) {
@@ -262,6 +274,10 @@ abstract contract Gate {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
+
+        if (vaultSharesAmount == 0) {
+            return 0;
+        }
 
         // only supported if vault shares are ERC20
         if (!vaultSharesIsERC20()) {
@@ -355,12 +371,18 @@ abstract contract Gate {
             updatedPricePerVaultShare,
             underlyingDecimals
         );
-        yieldAmount = _getClaimableYieldAmount(
-            vault,
-            pyt,
-            msg.sender,
-            updatedYieldPerToken
-        );
+        uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][
+            msg.sender
+        ];
+        if (userYieldPerTokenStored_ != 0) {
+            yieldAmount = _getClaimableYieldAmount(
+                vault,
+                pyt,
+                msg.sender,
+                updatedYieldPerToken,
+                userYieldPerTokenStored_
+            );
+        }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken;
@@ -446,11 +468,7 @@ abstract contract Gate {
                                 // Deployment bytecode:
                                 type(PerpetualYieldToken).creationCode,
                                 // Constructor arguments:
-                                abi.encode(
-                                    address(this),
-                                    vault,
-                                    getUnderlyingOfVault(vault).decimals()
-                                )
+                                abi.encode(address(this), vault)
                             )
                         )
                     )
@@ -479,7 +497,8 @@ abstract contract Gate {
                     pyt,
                     getPricePerVaultShare(vault),
                     pyt.decimals()
-                )
+                ),
+                userYieldPerTokenStored[vault][user]
             );
     }
 
@@ -542,13 +561,18 @@ abstract contract Gate {
     /// accrue the yield earned by the from & to accounts
     /// @param from The token transfer from account
     /// @param to The token transfer to account
-    function beforePerpetualYieldTokenTransfer(address from, address to)
-        external
-        virtual
-    {
+    function beforePerpetualYieldTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) external virtual {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
+
+        if (amount == 0) {
+            return;
+        }
 
         address vault = PerpetualYieldToken(msg.sender).vault();
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
@@ -577,19 +601,22 @@ abstract contract Gate {
             vault,
             pyt,
             from,
-            updatedYieldPerToken
+            updatedYieldPerToken,
+            userYieldPerTokenStored[vault][from]
         );
         userYieldPerTokenStored[vault][from] = updatedYieldPerToken;
 
         // the to account might not have held PYTs before
         // we only accrue yield if they have
-        if (userYieldPerTokenStored[vault][to] != 0) {
+        uint256 toUserYieldPerTokenStored = userYieldPerTokenStored[vault][to];
+        if (toUserYieldPerTokenStored != 0) {
             // to account has held PYTs before
             userAccruedYield[vault][to] = _getClaimableYieldAmount(
                 vault,
                 pyt,
                 to,
-                updatedYieldPerToken
+                updatedYieldPerToken,
+                toUserYieldPerTokenStored
             );
         }
         userYieldPerTokenStored[vault][to] = updatedYieldPerToken;
@@ -613,15 +640,19 @@ abstract contract Gate {
             updatedPricePerVaultShare,
             underlyingDecimals
         );
-        userAccruedYield[vault][user] = _getClaimableYieldAmount(
-            vault,
-            pyt,
-            msg.sender,
-            updatedYieldPerToken
-        );
+        uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
+        if (userYieldPerTokenStored_ != 0) {
+            userAccruedYield[vault][user] = _getClaimableYieldAmount(
+                vault,
+                pyt,
+                user,
+                updatedYieldPerToken,
+                userYieldPerTokenStored_
+            );
+        }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
-        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken;
+        userYieldPerTokenStored[vault][user] = updatedYieldPerToken;
     }
 
     /// @dev Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
@@ -629,12 +660,13 @@ abstract contract Gate {
         address vault,
         PerpetualYieldToken pyt,
         address user,
-        uint256 updatedYieldPerToken
+        uint256 updatedYieldPerToken,
+        uint256 userYieldPerTokenStored_
     ) internal view virtual returns (uint256) {
         return
             FullMath.mulDiv(
                 pyt.balanceOf(user),
-                updatedYieldPerToken - userYieldPerTokenStored[vault][user],
+                updatedYieldPerToken - userYieldPerTokenStored_,
                 PRECISION
             ) + userAccruedYield[vault][user];
     }

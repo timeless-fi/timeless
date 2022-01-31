@@ -18,7 +18,7 @@ contract PerpetualYieldToken is BaseERC20 {
         override
         returns (bool)
     {
-        Gate(gate).beforePerpetualYieldTokenTransfer(msg.sender, to);
+        Gate(gate).beforePerpetualYieldTokenTransfer(msg.sender, to, amount);
 
         return super.transfer(to, amount);
     }
@@ -28,7 +28,7 @@ contract PerpetualYieldToken is BaseERC20 {
         address to,
         uint256 amount
     ) public virtual override returns (bool) {
-        Gate(gate).beforePerpetualYieldTokenTransfer(from, to);
+        Gate(gate).beforePerpetualYieldTokenTransfer(from, to, amount);
 
         return super.transferFrom(from, to, amount);
     }
