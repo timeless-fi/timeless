@@ -44,6 +44,52 @@ abstract contract Gate {
     error Error_SenderNotPerpetualYieldToken();
 
     /// -----------------------------------------------------------------------
+    /// Events
+    /// -----------------------------------------------------------------------
+
+    event EnterWithUnderlying(
+        address indexed sender,
+        address indexed recipient,
+        address indexed vault,
+        uint256 underlyingAmount
+    );
+    event EnterWithVaultShares(
+        address indexed sender,
+        address indexed recipient,
+        address indexed vault,
+        uint256 vaultSharesAmount
+    );
+    event ExitToUnderlying(
+        address indexed sender,
+        address indexed recipient,
+        address indexed vault,
+        uint256 underlyingAmount
+    );
+    event ExitToVaultShares(
+        address indexed sender,
+        address indexed recipient,
+        address indexed vault,
+        uint256 vaultSharesAmount
+    );
+    event ClaimYieldInUnderlying(
+        address indexed sender,
+        address indexed recipient,
+        address indexed vault,
+        uint256 underlyingAmount
+    );
+    event ClaimYieldInVaultShares(
+        address indexed sender,
+        address indexed recipient,
+        address indexed vault,
+        uint256 vaultSharesAmount
+    );
+    event DeployTokenPairForVault(
+        address indexed vault,
+        PrincipalToken pt,
+        PerpetualYieldToken pyt
+    );
+
+    /// -----------------------------------------------------------------------
     /// Constants
     /// -----------------------------------------------------------------------
 
@@ -137,6 +183,13 @@ abstract contract Gate {
 
         // deposit underlying into vault
         _depositIntoVault(underlying, underlyingAmount, vault);
+
+        emit EnterWithUnderlying(
+            msg.sender,
+            recipient,
+            vault,
+            underlyingAmount
+        );
     }
 
     /// @notice Converts vault share tokens into PrincipalToken and PerpetualYieldToken.
@@ -201,6 +254,13 @@ abstract contract Gate {
             address(this),
             vaultSharesAmount
         );
+
+        emit EnterWithVaultShares(
+            msg.sender,
+            recipient,
+            vault,
+            vaultSharesAmount
+        );
     }
 
     /// @notice Converts PrincipalToken and PerpetualYieldToken to underlying tokens.
@@ -256,6 +316,8 @@ abstract contract Gate {
             underlyingAmount,
             underlyingDecimals
         );
+
+        emit ExitToUnderlying(msg.sender, recipient, vault, underlyingAmount);
     }
 
     /// @notice Converts PrincipalToken and PerpetualYieldToken to vault share tokens.
@@ -315,6 +377,8 @@ abstract contract Gate {
 
         // transfer vault tokens to recipient
         ERC20(vault).safeTransfer(recipient, vaultSharesAmount);
+
+        emit ExitToVaultShares(msg.sender, recipient, vault, vaultSharesAmount);
     }
 
     /// @notice Deploys the PrincipalToken and PerpetualYieldToken associated with a vault.
@@ -338,6 +402,8 @@ abstract contract Gate {
             address(this),
             vault
         );
+
+        emit DeployTokenPairForVault(vault, pt, pyt);
     }
 
     /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender, in the underlying token.
@@ -404,6 +470,13 @@ abstract contract Gate {
                 vault,
                 yieldAmount,
                 underlyingDecimals
+            );
+
+            emit ClaimYieldInUnderlying(
+                msg.sender,
+                recipient,
+                vault,
+                yieldAmount
             );
         }
     }
@@ -476,6 +549,13 @@ abstract contract Gate {
 
             // transfer vault shares to recipient
             ERC20(vault).safeTransfer(recipient, yieldAmount);
+
+            emit ClaimYieldInVaultShares(
+                msg.sender,
+                recipient,
+                vault,
+                yieldAmount
+            );
         }
     }
 
