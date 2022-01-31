@@ -417,9 +417,13 @@ contract YearnGateTest is BaseTest {
         underlyingDecimals += 3;
 
         // bound the initial yield below 100x the initial underlying
-        initialYieldAmount = uint192(
-            initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
-        );
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
 
         // bound between 1 and 99
         pytTransferPercent %= 99;
@@ -512,9 +516,13 @@ contract YearnGateTest is BaseTest {
         underlyingDecimals += 3;
 
         // bound the initial yield below 10x the initial underlying
-        initialYieldAmount = uint192(
-            initialYieldAmount % (uint256(initialUnderlyingAmount) * 10)
-        );
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 10)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
 
         // bound between 1 and 99
         pytTransferPercent %= 99;
@@ -618,9 +626,13 @@ contract YearnGateTest is BaseTest {
         underlyingDecimals += 3;
 
         // bound the initial yield below 100x the initial underlying
-        initialYieldAmount = uint192(
-            initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
-        );
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
 
         // bound between 1 and 99
         pytTransferPercent %= 99;
@@ -721,9 +733,13 @@ contract YearnGateTest is BaseTest {
         underlyingDecimals += 3;
 
         // bound the initial yield below 10x the initial underlying
-        initialYieldAmount = uint192(
-            initialYieldAmount % (uint256(initialUnderlyingAmount) * 10)
-        );
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 10)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
 
         // bound between 1 and 99
         pytTransferPercent %= 99;
