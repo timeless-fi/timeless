@@ -42,7 +42,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals = 18;
+            underlyingDecimals %= 18;
         }
 
         (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
@@ -100,7 +100,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals = 18;
+            underlyingDecimals %= 18;
         }
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
@@ -171,7 +171,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals = 18;
+            underlyingDecimals %= 18;
         }
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
@@ -246,7 +246,7 @@ contract YearnGateTest is BaseTest {
 
         if (underlyingDecimals > 18) {
             // crazy stupid token, why would you do this
-            underlyingDecimals = 18;
+            underlyingDecimals %= 18;
         }
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
@@ -315,7 +315,30 @@ contract YearnGateTest is BaseTest {
         );
     }
 
-    function test_deployTokenPairForVault() public {}
+    function test_deployTokenPairForVault(uint8 underlyingDecimals) public {
+        if (underlyingDecimals > 18) {
+            // crazy stupid token, why would you do this
+            underlyingDecimals %= 18;
+        }
+
+        TestERC20 underlying = new TestERC20(underlyingDecimals);
+        TestYearnVault vault = new TestYearnVault(underlying);
+        (PrincipalToken pt, PerpetualYieldToken pyt) = gate
+            .deployTokenPairForVault(address(vault));
+
+        assertEq(
+            address(gate.getPrincipalTokenForVault(address(vault))),
+            address(pt)
+        );
+        assertEq(
+            address(gate.getPerpetualYieldTokenForVault(address(vault))),
+            address(pyt)
+        );
+        assertEq(pt.decimals(), underlyingDecimals);
+        assertEq(pyt.decimals(), underlyingDecimals);
+        assertEq(pt.totalSupply(), 0);
+        assertEq(pyt.totalSupply(), 0);
+    }
 
     function test_claimYield() public {}
 
@@ -324,12 +347,12 @@ contract YearnGateTest is BaseTest {
     /// -----------------------------------------------------------------------
 
     function _setUpVault(
-        uint8 decimals,
+        uint8 underlyingDecimals,
         uint256 initialUnderlyingAmount,
         uint256 initialYieldAmount
     ) internal returns (TestERC20 underlying, TestYearnVault vault) {
         // setup contracts
-        underlying = new TestERC20(decimals);
+        underlying = new TestERC20(underlyingDecimals);
         vault = new TestYearnVault(underlying);
         underlying.approve(address(gate), type(uint256).max);
         underlying.approve(address(vault), type(uint256).max);
