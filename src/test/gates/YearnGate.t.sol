@@ -841,6 +841,21 @@ contract YearnGateTest is BaseTest {
     }
 
     /// -----------------------------------------------------------------------
+    /// Failure tests
+    /// -----------------------------------------------------------------------
+
+    function testFail_cannotCallPYTTransferHook() public {
+        gate.beforePerpetualYieldTokenTransfer(tester, tester1, 10**18);
+    }
+
+    function testFail_cannotDeployTokensTwice() public {
+        TestERC20 underlying = new TestERC20(18);
+        TestYearnVault vault = new TestYearnVault(underlying);
+        gate.deployTokenPairForVault(address(vault));
+        gate.deployTokenPairForVault(address(vault));
+    }
+
+    /// -----------------------------------------------------------------------
     /// Internal utilities
     /// -----------------------------------------------------------------------
 

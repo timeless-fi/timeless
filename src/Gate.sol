@@ -340,8 +340,6 @@ abstract contract Gate {
         );
     }
 
-    event log_named_uint(string key, uint256 val);
-
     /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender.
     /// @param recipient The recipient of the yield
     /// @param vault The vault to claim yield from
@@ -389,13 +387,6 @@ abstract contract Gate {
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
-
-        emit log_named_uint("updatedYieldPerToken", updatedYieldPerToken);
-        emit log_named_uint(
-            "userYieldPerTokenStored_",
-            userYieldPerTokenStored_
-        );
-        emit log_named_uint("yieldAmount", yieldAmount);
 
         // withdraw yield
         if (yieldAmount > 0) {
