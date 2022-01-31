@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import {BaseTest, console} from "../base/BaseTest.sol";
 
+import {FullMath} from "../../lib/FullMath.sol";
 import {TestERC20} from "../mocks/TestERC20.sol";
 import {YearnGate} from "../../gates/YearnGate.sol";
 import {PrincipalToken} from "../../PrincipalToken.sol";
@@ -234,7 +235,85 @@ contract YearnGateTest is BaseTest {
         );
     }
 
-    function test_exitToVaultShares(uint256 vaultSharesAmount) public {}
+    function test_exitToVaultShares(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount
+    ) public {
+        vm.startPrank(tester);
+
+        if (underlyingDecimals > 18) {
+            // crazy stupid token, why would you do this
+            underlyingDecimals = 18;
+        }
+
+        if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
+            // don't give tester free yield
+            initialUnderlyingAmount = initialYieldAmount;
+        }
+
+        (TestERC20 underlying, TestYearnVault vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(tester, address(vault), underlyingAmount);
+
+        // mint additional yield to the vault
+        underlying.mint(address(vault), additionalYieldAmount);
+
+        // exit
+        uint256 vaultSharesAmount = FullMath.mulDiv(
+            underlyingAmount,
+            10**underlyingDecimals,
+            vault.pricePerShare()
+        );
+        uint256 burnAmount = gate.exitToVaultShares(
+            recipient,
+            address(vault),
+            vaultSharesAmount
+        );
+
+        // check balances
+        uint256 epsilonInv = 10**52;
+        // vault shares transferred to tester
+        assertEqDecimalEpsilonBelow(
+            vault.balanceOf(recipient),
+            vaultSharesAmount,
+            underlyingDecimals,
+            epsilonInv
+        );
+        // recipient burnt PT and PYT
+        PrincipalToken pt = gate.getPrincipalTokenForVault(address(vault));
+        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(
+            address(vault)
+        );
+        assertEqDecimalEpsilonBelow(
+            pt.balanceOf(recipient),
+            0,
+            underlyingDecimals,
+            epsilonInv
+        );
+        assertEqDecimalEpsilonBelow(
+            pyt.balanceOf(recipient),
+            0,
+            underlyingDecimals,
+            epsilonInv
+        );
+        assertEqDecimalEpsilonBelow(
+            burnAmount,
+            underlyingAmount,
+            underlyingDecimals,
+            epsilonInv
+        );
+    }
 
     function test_deployTokenPairForVault() public {}
 
