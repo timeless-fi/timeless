@@ -161,7 +161,7 @@ contract YearnGate is Gate {
     }
 
     /// @inheritdoc Gate
-    function _vaultSharesAmountToTokenPairAmount(
+    function _vaultSharesAmountToUnderlyingAmount(
         address vault,
         uint256 vaultSharesAmount,
         uint8 underlyingDecimals
@@ -171,6 +171,20 @@ contract YearnGate is Gate {
                 vaultSharesAmount,
                 getPricePerVaultShare(vault),
                 10**underlyingDecimals
+            );
+    }
+
+    /// @inheritdoc Gate
+    function _underlyingAmountToVaultSharesAmount(
+        address vault,
+        uint256 underlyingAmount,
+        uint8 underlyingDecimals
+    ) internal view virtual override returns (uint256) {
+        return
+            FullMath.mulDiv(
+                underlyingAmount,
+                10**underlyingDecimals,
+                getPricePerVaultShare(vault)
             );
     }
 

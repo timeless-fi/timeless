@@ -71,7 +71,7 @@ abstract contract Gate {
         public userYieldPerTokenStored;
 
     /// @notice The amount of yield a user has accrued, at the time when they last interacted
-    /// with the gate/PYT (without calling claimYield()).
+    /// with the gate/PYT (without calling claimYieldInUnderlying()).
     /// @dev vault => user => value
     mapping(address => mapping(address => uint256)) public userAccruedYield;
 
@@ -183,7 +183,7 @@ abstract contract Gate {
         _accrueYield(vault, pyt, recipient, underlyingDecimals);
 
         // mint PTs and PYTs
-        mintAmount = _vaultSharesAmountToTokenPairAmount(
+        mintAmount = _vaultSharesAmountToUnderlyingAmount(
             vault,
             vaultSharesAmount,
             underlyingDecimals
@@ -301,7 +301,7 @@ abstract contract Gate {
         _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
 
         // burn PTs and PYTs
-        burnAmount = _vaultSharesAmountToTokenPairAmount(
+        burnAmount = _vaultSharesAmountToUnderlyingAmount(
             vault,
             vaultSharesAmount,
             underlyingDecimals
@@ -340,11 +340,13 @@ abstract contract Gate {
         );
     }
 
-    /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender.
+    /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender, in the underlying token.
+    /// @dev If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// revert.
     /// @param recipient The recipient of the yield
     /// @param vault The vault to claim yield from
-    /// @return yieldAmount The amount of yield claimed
-    function claimYield(address recipient, address vault)
+    /// @return yieldAmount The amount of yield claimed, in underlying tokens
+    function claimYieldInUnderlying(address recipient, address vault)
         external
         virtual
         returns (uint256 yieldAmount)
@@ -396,12 +398,84 @@ abstract contract Gate {
             /// Effects
             /// -----------------------------------------------------------------------
 
+            // withdraw underlying to recipient
             _withdrawFromVault(
                 recipient,
                 vault,
                 yieldAmount,
                 underlyingDecimals
             );
+        }
+    }
+
+    /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender, in vault shares.
+    /// @dev Only available if vault shares are transferrable ERC20 tokens.
+    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// revert.
+    /// @param recipient The recipient of the yield
+    /// @param vault The vault to claim yield from
+    /// @return yieldAmount The amount of yield claimed, in vault shares
+    function claimYieldInVaultShares(address recipient, address vault)
+        external
+        virtual
+        returns (uint256 yieldAmount)
+    {
+        /// -----------------------------------------------------------------------
+        /// Validation
+        /// -----------------------------------------------------------------------
+
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        if (address(pyt).code.length == 0) {
+            revert Error_TokenPairNotDeployed();
+        }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        uint8 underlyingDecimals = pyt.decimals();
+
+        // accrue yield
+        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
+        uint256 updatedYieldPerToken = _computeYieldPerToken(
+            vault,
+            pyt,
+            updatedPricePerVaultShare,
+            underlyingDecimals
+        );
+        uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][
+            msg.sender
+        ];
+        if (userYieldPerTokenStored_ != 0) {
+            yieldAmount = _getClaimableYieldAmount(
+                vault,
+                pyt,
+                msg.sender,
+                updatedYieldPerToken,
+                userYieldPerTokenStored_
+            );
+        }
+        yieldPerTokenStored[vault] = updatedYieldPerToken;
+        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
+        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
+
+        // withdraw yield
+        if (yieldAmount > 0) {
+            userAccruedYield[vault][msg.sender] = 0;
+
+            /// -----------------------------------------------------------------------
+            /// Effects
+            /// -----------------------------------------------------------------------
+
+            // convert yieldAmount to be denominated in vault shares
+            yieldAmount = _underlyingAmountToVaultSharesAmount(
+                vault,
+                yieldAmount,
+                underlyingDecimals
+            );
+
+            // transfer vault shares to recipient
+            ERC20(vault).safeTransfer(recipient, yieldAmount);
         }
     }
 
@@ -730,10 +804,17 @@ abstract contract Gate {
         uint8 underlyingDecimals
     ) internal virtual;
 
-    /// @dev Converts a vault share amount into an equivalent PYT/PT amount
-    function _vaultSharesAmountToTokenPairAmount(
+    /// @dev Converts a vault share amount into an equivalent underlying asset amount
+    function _vaultSharesAmountToUnderlyingAmount(
         address vault,
         uint256 vaultSharesAmount,
+        uint8 underlyingDecimals
+    ) internal view virtual returns (uint256);
+
+    /// @dev Converts an underlying asset amount into an equivalent vault shares amount
+    function _underlyingAmountToVaultSharesAmount(
+        address vault,
+        uint256 underlyingAmount,
         uint8 underlyingDecimals
     ) internal view virtual returns (uint256);
 
