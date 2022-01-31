@@ -9,7 +9,12 @@ import {BaseERC20} from "./lib/BaseERC20.sol";
 /// @notice The ERC20 contract representing perpetual yield tokens
 contract PerpetualYieldToken is BaseERC20 {
     constructor(address gate_, address vault_)
-        BaseERC20("NAME_TBD", "SYMBOL_TBD", gate_, vault_)
+        BaseERC20(
+            Gate(gate_).perpetualYieldTokenName(vault_),
+            Gate(gate_).perpetualYieldTokenSymbol(vault_),
+            gate_,
+            vault_
+        )
     {}
 
     function transfer(address to, uint256 amount)

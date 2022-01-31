@@ -60,6 +60,74 @@ contract YearnGate is Gate {
         return true;
     }
 
+    /// @inheritdoc Gate
+    function principalTokenName(address vault)
+        external
+        view
+        virtual
+        override
+        returns (string memory)
+    {
+        return
+            string(
+                abi.encodePacked(
+                    "Timeless ",
+                    YearnVault(vault).name(),
+                    " Principal Token"
+                )
+            );
+    }
+
+    /// @inheritdoc Gate
+    function principalTokenSymbol(address vault)
+        external
+        view
+        virtual
+        override
+        returns (string memory)
+    {
+        return
+            string(
+                abi.encodePacked(unicode"∞-", YearnVault(vault).symbol(), "-PT")
+            );
+    }
+
+    /// @inheritdoc Gate
+    function perpetualYieldTokenName(address vault)
+        external
+        view
+        virtual
+        override
+        returns (string memory)
+    {
+        return
+            string(
+                abi.encodePacked(
+                    "Timeless ",
+                    YearnVault(vault).name(),
+                    " Perpetual Yield Token"
+                )
+            );
+    }
+
+    /// @inheritdoc Gate
+    function perpetualYieldTokenSymbol(address vault)
+        external
+        view
+        virtual
+        override
+        returns (string memory)
+    {
+        return
+            string(
+                abi.encodePacked(
+                    unicode"∞-",
+                    YearnVault(vault).symbol(),
+                    "-PYT"
+                )
+            );
+    }
+
     /// -----------------------------------------------------------------------
     /// Internal utilities
     /// -----------------------------------------------------------------------

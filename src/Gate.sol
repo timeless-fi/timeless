@@ -562,6 +562,42 @@ abstract contract Gate {
     /// to represent shares, false otherwise.
     function vaultSharesIsERC20() public pure virtual returns (bool);
 
+    /// @notice Computes the ERC20 name of the PrincipalToken of a vault.
+    /// @param vault The vault to query
+    /// @return The ERC20 name
+    function principalTokenName(address vault)
+        external
+        view
+        virtual
+        returns (string memory);
+
+    /// @notice Computes the ERC20 symbol of the PrincipalToken of a vault.
+    /// @param vault The vault to query
+    /// @return The ERC20 symbol
+    function principalTokenSymbol(address vault)
+        external
+        view
+        virtual
+        returns (string memory);
+
+    /// @notice Computes the ERC20 name of the PerpetualYieldToken of a vault.
+    /// @param vault The vault to query
+    /// @return The ERC20 name
+    function perpetualYieldTokenName(address vault)
+        external
+        view
+        virtual
+        returns (string memory);
+
+    /// @notice Computes the ERC20 symbol of the PrincipalToken of a vault.
+    /// @param vault The vault to query
+    /// @return The ERC20 symbol
+    function perpetualYieldTokenSymbol(address vault)
+        external
+        view
+        virtual
+        returns (string memory);
+
     /// -----------------------------------------------------------------------
     /// PYT transfer hooks
     /// -----------------------------------------------------------------------

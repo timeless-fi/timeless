@@ -325,6 +325,10 @@ contract YearnGateTest is BaseTest {
             address(gate.getPerpetualYieldTokenForVault(address(vault))),
             address(pyt)
         );
+        assertEq(pt.name(), "Timeless TestYearnVault Principal Token");
+        assertEq(pyt.name(), "Timeless TestYearnVault Perpetual Yield Token");
+        assertEq(pt.symbol(), unicode"∞-yTEST-PT");
+        assertEq(pyt.symbol(), unicode"∞-yTEST-PYT");
         assertEq(pt.decimals(), underlyingDecimals);
         assertEq(pyt.decimals(), underlyingDecimals);
         assertEq(pt.totalSupply(), 0);
