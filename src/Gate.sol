@@ -94,7 +94,7 @@ abstract contract Gate {
     /// -----------------------------------------------------------------------
 
     /// @notice The precision used by yieldPerTokenStored
-    uint256 internal constant PRECISION = 10**18;
+    uint256 internal constant PRECISION = 10**27;
 
     /// -----------------------------------------------------------------------
     /// Storage variables

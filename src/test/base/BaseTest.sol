@@ -14,6 +14,10 @@ contract BaseTest is DSTest {
         uint256 b,
         uint256 epsilonInv
     ) internal {
+        if (b / epsilonInv == 0 && b != 0) {
+            epsilonInv = b;
+        }
+
         assertLe(a, b);
         assertGe(a, b - b / epsilonInv);
     }
@@ -23,6 +27,10 @@ contract BaseTest is DSTest {
         uint256 b,
         uint256 epsilonInv
     ) internal {
+        if (b / epsilonInv == 0 && b != 0) {
+            epsilonInv = b;
+        }
+
         assertLe(a, b + b / epsilonInv);
         assertGe(a, b - b / epsilonInv);
     }
@@ -33,6 +41,10 @@ contract BaseTest is DSTest {
         uint256 decimals,
         uint256 epsilonInv
     ) internal {
+        if (b / epsilonInv == 0 && b != 0) {
+            epsilonInv = b;
+        }
+
         assertLeDecimal(a, b, decimals);
         assertGeDecimal(a, b - b / epsilonInv, decimals);
     }
@@ -43,6 +55,10 @@ contract BaseTest is DSTest {
         uint256 decimals,
         uint256 epsilonInv
     ) internal {
+        if (b / epsilonInv == 0 && b != 0) {
+            epsilonInv = b;
+        }
+
         assertLeDecimal(a, b + b / epsilonInv, decimals);
         assertGeDecimal(a, b - b / epsilonInv, decimals);
     }

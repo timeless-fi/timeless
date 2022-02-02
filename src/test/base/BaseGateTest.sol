@@ -113,6 +113,14 @@ abstract contract BaseGateTest is BaseTest {
         // mint underlying and enter vault
         underlying.mint(tester, underlyingAmount);
         uint256 vaultSharesAmount = _depositInVault(vault, underlyingAmount);
+        // due to the precision limitations of the vault, we might've lost some underlying
+        underlyingAmount = uint192(
+            FullMath.mulDiv(
+                vaultSharesAmount,
+                gate.getPricePerVaultShare(vault),
+                10**underlyingDecimals
+            )
+        );
 
         // enter
         ERC20(vault).approve(address(gate), type(uint256).max);
@@ -552,7 +560,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received all the yield
-        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        uint256 epsilonInv = 10**underlyingDecimals;
         assertEqDecimalEpsilonBelow(
             testerClaimedYield,
             expectedYield,
@@ -562,7 +570,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should have received 0
-        epsilonInv = 10**(underlyingDecimals - 2);
+        epsilonInv = 10**(underlyingDecimals - 1);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertLeDecimal(
@@ -664,7 +672,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received the correct amount of yield
-        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        uint256 epsilonInv = 10**underlyingDecimals;
         assertEqDecimalEpsilonAround(
             testerClaimedYield,
             expectedYield,
@@ -674,6 +682,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should've received the correct amount of yield
+        epsilonInv = 10**(underlyingDecimals - 2);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertEqDecimalEpsilonAround(
@@ -771,7 +780,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received all the yield
-        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        uint256 epsilonInv = 10**underlyingDecimals;
         assertEqDecimalEpsilonBelow(
             testerClaimedYield,
             expectedYield,
@@ -781,7 +790,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should have received 0
-        epsilonInv = 10**(underlyingDecimals - 2);
+        epsilonInv = 10**(underlyingDecimals - 1);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertLeDecimal(
@@ -889,7 +898,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received the correct amount of yield
-        uint256 epsilonInv = 10**(underlyingDecimals - 3);
+        uint256 epsilonInv = 10**underlyingDecimals;
         assertEqDecimalEpsilonAround(
             testerClaimedYield,
             expectedYield,
@@ -899,6 +908,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should've received the correct amount of yield
+        epsilonInv = 10**(underlyingDecimals - 2);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertEqDecimalEpsilonAround(
