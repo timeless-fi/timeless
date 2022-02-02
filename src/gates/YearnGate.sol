@@ -61,7 +61,7 @@ contract YearnGate is Gate {
     }
 
     /// @inheritdoc Gate
-    function principalTokenName(address vault)
+    function negativeYieldTokenName(address vault)
         external
         view
         virtual
@@ -73,13 +73,13 @@ contract YearnGate is Gate {
                 abi.encodePacked(
                     "Timeless ",
                     YearnVault(vault).name(),
-                    " Principal Token"
+                    " Negative Yield Token"
                 )
             );
     }
 
     /// @inheritdoc Gate
-    function principalTokenSymbol(address vault)
+    function negativeYieldTokenSymbol(address vault)
         external
         view
         virtual
@@ -88,7 +88,11 @@ contract YearnGate is Gate {
     {
         return
             string(
-                abi.encodePacked(unicode"∞-", YearnVault(vault).symbol(), "-PT")
+                abi.encodePacked(
+                    unicode"∞-",
+                    YearnVault(vault).symbol(),
+                    "-NYT"
+                )
             );
     }
 

@@ -30,4 +30,40 @@ contract YearnGateTest is BaseGateTest {
     {
         return TestYearnVault(vault).deposit(underlyingAmount);
     }
+
+    function _getExpectedNYTName()
+        internal
+        virtual
+        override
+        returns (string memory)
+    {
+        return "Timeless TestYearnVault Negative Yield Token";
+    }
+
+    function _getExpectedNYTSymbol()
+        internal
+        virtual
+        override
+        returns (string memory)
+    {
+        return unicode"∞-yTEST-NYT";
+    }
+
+    function _getExpectedPYTName()
+        internal
+        virtual
+        override
+        returns (string memory)
+    {
+        return "Timeless TestYearnVault Perpetual Yield Token";
+    }
+
+    function _getExpectedPYTSymbol()
+        internal
+        virtual
+        override
+        returns (string memory)
+    {
+        return unicode"∞-yTEST-PYT";
+    }
 }

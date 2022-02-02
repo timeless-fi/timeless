@@ -8,7 +8,7 @@ import {BaseTest, console} from "../base/BaseTest.sol";
 import {Gate} from "../../Gate.sol";
 import {FullMath} from "../../lib/FullMath.sol";
 import {TestERC20} from "../mocks/TestERC20.sol";
-import {PrincipalToken} from "../../PrincipalToken.sol";
+import {NegativeYieldToken} from "../../NegativeYieldToken.sol";
 import {PerpetualYieldToken} from "../../PerpetualYieldToken.sol";
 
 abstract contract BaseGateTest is BaseTest {
@@ -70,11 +70,11 @@ abstract contract BaseGateTest is BaseTest {
             underlyingAmount,
             underlyingDecimals
         );
-        // recipient received PT and PYT
-        PrincipalToken pt = gate.getPrincipalTokenForVault(vault);
+        // recipient received NYT and PYT
+        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimal(
-            pt.balanceOf(recipient),
+            nyt.balanceOf(recipient),
             underlyingAmount,
             underlyingDecimals
         );
@@ -130,12 +130,12 @@ abstract contract BaseGateTest is BaseTest {
             vaultSharesAmount,
             underlyingDecimals
         );
-        // recipient received PT and PYT
-        PrincipalToken pt = gate.getPrincipalTokenForVault(vault);
+        // recipient received NYT and PYT
+        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         uint256 epsilonInv = 10**53;
         assertEqDecimalEpsilonBelow(
-            pt.balanceOf(recipient),
+            nyt.balanceOf(recipient),
             underlyingAmount,
             underlyingDecimals,
             epsilonInv
@@ -202,11 +202,11 @@ abstract contract BaseGateTest is BaseTest {
             underlyingDecimals,
             epsilonInv
         );
-        // recipient burnt PT and PYT
-        PrincipalToken pt = gate.getPrincipalTokenForVault(vault);
+        // recipient burnt NYT and PYT
+        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimalEpsilonBelow(
-            pt.balanceOf(recipient),
+            nyt.balanceOf(recipient),
             0,
             underlyingDecimals,
             epsilonInv
@@ -280,11 +280,11 @@ abstract contract BaseGateTest is BaseTest {
             underlyingDecimals,
             epsilonInv
         );
-        // recipient burnt PT and PYT
-        PrincipalToken pt = gate.getPrincipalTokenForVault(vault);
+        // recipient burnt NYT and PYT
+        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimalEpsilonBelow(
-            pt.balanceOf(recipient),
+            nyt.balanceOf(recipient),
             0,
             underlyingDecimals,
             epsilonInv
@@ -309,21 +309,24 @@ abstract contract BaseGateTest is BaseTest {
 
         TestERC20 underlying = new TestERC20(underlyingDecimals);
         address vault = _deployVault(underlying);
-        (PrincipalToken pt, PerpetualYieldToken pyt) = gate
+        (NegativeYieldToken nyt, PerpetualYieldToken pyt) = gate
             .deployTokenPairForVault(vault);
 
-        assertEq(address(gate.getPrincipalTokenForVault(vault)), address(pt));
+        assertEq(
+            address(gate.getNegativeYieldTokenForVault(vault)),
+            address(nyt)
+        );
         assertEq(
             address(gate.getPerpetualYieldTokenForVault(vault)),
             address(pyt)
         );
-        // assertEq(pt.name(), "Timeless address Principal Token");
-        // assertEq(pyt.name(), "Timeless address Perpetual Yield Token");
-        // assertEq(pt.symbol(), unicode"∞-yTEST-PT");
-        // assertEq(pyt.symbol(), unicode"∞-yTEST-PYT");
-        assertEq(pt.decimals(), underlyingDecimals);
+        assertEq(nyt.name(), _getExpectedNYTName());
+        assertEq(pyt.name(), _getExpectedPYTName());
+        assertEq(nyt.symbol(), _getExpectedNYTSymbol());
+        assertEq(pyt.symbol(), _getExpectedPYTSymbol());
+        assertEq(nyt.decimals(), underlyingDecimals);
         assertEq(pyt.decimals(), underlyingDecimals);
-        assertEq(pt.totalSupply(), 0);
+        assertEq(nyt.totalSupply(), 0);
         assertEq(pyt.totalSupply(), 0);
     }
 
@@ -965,4 +968,12 @@ abstract contract BaseGateTest is BaseTest {
         internal
         virtual
         returns (uint256);
+
+    function _getExpectedNYTName() internal virtual returns (string memory);
+
+    function _getExpectedNYTSymbol() internal virtual returns (string memory);
+
+    function _getExpectedPYTName() internal virtual returns (string memory);
+
+    function _getExpectedPYTSymbol() internal virtual returns (string memory);
 }

@@ -6,16 +6,16 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
 import {FullMath} from "./lib/FullMath.sol";
-import {PrincipalToken} from "./PrincipalToken.sol";
+import {NegativeYieldToken} from "./NegativeYieldToken.sol";
 import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 
 /// @title Gate
 /// @author zefram.eth
-/// @notice Gate is the main contract users interact with to mint/burn PrincipalToken
+/// @notice Gate is the main contract users interact with to mint/burn NegativeYieldToken
 /// and PerpetualYieldToken, as well as claim the yield earned by PYTs.
 /// @dev Gate is an abstract contract that should be inherited from in order to support
 /// a specific vault protocol (e.g. YearnGate supports YearnVault). Each Gate handles
-/// all vaults & associated PTs/PYTs of a specific vault protocol.
+/// all vaults & associated NYTs/PYTs of a specific vault protocol.
 ///
 /// Vaults are yield-generating contracts used by Gate. Gate makes several assumptions about
 /// a vault:
@@ -85,7 +85,7 @@ abstract contract Gate {
     );
     event DeployTokenPairForVault(
         address indexed vault,
-        PrincipalToken pt,
+        NegativeYieldToken nyt,
         PerpetualYieldToken pyt
     );
 
@@ -125,15 +125,15 @@ abstract contract Gate {
     /// User actions
     /// -----------------------------------------------------------------------
 
-    /// @notice Converts underlying tokens into PrincipalToken and PerpetualYieldToken.
-    /// The amount of PT and PYT minted will be equal to the underlying token amount.
+    /// @notice Converts underlying tokens into NegativeYieldToken and PerpetualYieldToken.
+    /// The amount of NYT and PYT minted will be equal to the underlying token amount.
     /// @dev The underlying tokens will be immediately deposited into the specified vault.
-    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// deploy them before proceeding, which will increase the gas cost significantly.
-    /// @param recipient The recipient of the minted PT and PYT
-    /// @param vault The vault to mint PT and PYT for
+    /// @param recipient The recipient of the minted NYT and PYT
+    /// @param vault The vault to mint NYT and PYT for
     /// @param underlyingAmount The amount of underlying tokens to use
-    /// @return mintAmount The amount of PT and PYT minted (the amounts are equal)
+    /// @return mintAmount The amount of NYT and PYT minted (the amounts are equal)
     function enterWithUnderlying(
         address recipient,
         address vault,
@@ -147,15 +147,15 @@ abstract contract Gate {
             return 0;
         }
 
-        PrincipalToken pt = getPrincipalTokenForVault(vault);
-        if (address(pt).code.length == 0) {
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
+        if (address(nyt).code.length == 0) {
             // token pair hasn't been deployed yet
             // do the deployment now
-            // only need to check pt since pt and pyt are always deployed in pairs
+            // only need to check nyt since nyt and pyt are always deployed in pairs
             deployTokenPairForVault(vault);
         }
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        uint8 underlyingDecimals = pt.decimals();
+        uint8 underlyingDecimals = nyt.decimals();
 
         /// -----------------------------------------------------------------------
         /// State updates
@@ -164,9 +164,9 @@ abstract contract Gate {
         // accrue yield
         _accrueYield(vault, pyt, recipient, underlyingDecimals);
 
-        // mint PTs and PYTs
+        // mint NYTs and PYTs
         mintAmount = underlyingAmount;
-        pt.gateMint(recipient, mintAmount);
+        nyt.gateMint(recipient, mintAmount);
         pyt.gateMint(recipient, mintAmount);
 
         /// -----------------------------------------------------------------------
@@ -192,14 +192,14 @@ abstract contract Gate {
         );
     }
 
-    /// @notice Converts vault share tokens into PrincipalToken and PerpetualYieldToken.
+    /// @notice Converts vault share tokens into NegativeYieldToken and PerpetualYieldToken.
     /// @dev Only available if vault shares are transferrable ERC20 tokens.
-    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// deploy them before proceeding, which will increase the gas cost significantly.
-    /// @param recipient The recipient of the minted PT and PYT
-    /// @param vault The vault to mint PT and PYT for
+    /// @param recipient The recipient of the minted NYT and PYT
+    /// @param vault The vault to mint NYT and PYT for
     /// @param vaultSharesAmount The amount of vault share tokens to use
-    /// @return mintAmount The amount of PT and PYT minted (the amounts are equal)
+    /// @return mintAmount The amount of NYT and PYT minted (the amounts are equal)
     function enterWithVaultShares(
         address recipient,
         address vault,
@@ -218,15 +218,15 @@ abstract contract Gate {
             revert Error_VaultSharesNotERC20();
         }
 
-        PrincipalToken pt = getPrincipalTokenForVault(vault);
-        if (address(pt).code.length == 0) {
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
+        if (address(nyt).code.length == 0) {
             // token pair hasn't been deployed yet
             // do the deployment now
-            // only need to check pt since pt and pyt are always deployed in pairs
+            // only need to check nyt since nyt and pyt are always deployed in pairs
             deployTokenPairForVault(vault);
         }
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        uint8 underlyingDecimals = pt.decimals();
+        uint8 underlyingDecimals = nyt.decimals();
 
         /// -----------------------------------------------------------------------
         /// State updates
@@ -235,13 +235,13 @@ abstract contract Gate {
         // accrue yield
         _accrueYield(vault, pyt, recipient, underlyingDecimals);
 
-        // mint PTs and PYTs
+        // mint NYTs and PYTs
         mintAmount = _vaultSharesAmountToUnderlyingAmount(
             vault,
             vaultSharesAmount,
             underlyingDecimals
         );
-        pt.gateMint(recipient, mintAmount);
+        nyt.gateMint(recipient, mintAmount);
         pyt.gateMint(recipient, mintAmount);
 
         /// -----------------------------------------------------------------------
@@ -263,15 +263,15 @@ abstract contract Gate {
         );
     }
 
-    /// @notice Converts PrincipalToken and PerpetualYieldToken to underlying tokens.
-    /// The amount of PT and PYT burned will be equal to the underlying token amount.
+    /// @notice Converts NegativeYieldToken and PerpetualYieldToken to underlying tokens.
+    /// The amount of NYT and PYT burned will be equal to the underlying token amount.
     /// @dev The underlying tokens will be immediately withdrawn from the specified vault.
-    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// revert.
-    /// @param recipient The recipient of the minted PT and PYT
-    /// @param vault The vault to mint PT and PYT for
+    /// @param recipient The recipient of the minted NYT and PYT
+    /// @param vault The vault to mint NYT and PYT for
     /// @param underlyingAmount The amount of underlying tokens requested
-    /// @return burnAmount The amount of PT and PYT burned (the amounts are equal)
+    /// @return burnAmount The amount of NYT and PYT burned (the amounts are equal)
     function exitToUnderlying(
         address recipient,
         address vault,
@@ -285,9 +285,9 @@ abstract contract Gate {
             return 0;
         }
 
-        PrincipalToken pt = getPrincipalTokenForVault(vault);
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        if (address(pt).code.length == 0) {
+        if (address(nyt).code.length == 0) {
             revert Error_TokenPairNotDeployed();
         }
 
@@ -295,14 +295,14 @@ abstract contract Gate {
         /// State updates
         /// -----------------------------------------------------------------------
 
-        uint8 underlyingDecimals = pt.decimals();
+        uint8 underlyingDecimals = nyt.decimals();
 
         // accrue yield
         _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
 
-        // burn PTs and PYTs
+        // burn NYTs and PYTs
         burnAmount = underlyingAmount;
-        pt.gateBurn(msg.sender, burnAmount);
+        nyt.gateBurn(msg.sender, burnAmount);
         pyt.gateBurn(msg.sender, burnAmount);
 
         /// -----------------------------------------------------------------------
@@ -320,15 +320,15 @@ abstract contract Gate {
         emit ExitToUnderlying(msg.sender, recipient, vault, underlyingAmount);
     }
 
-    /// @notice Converts PrincipalToken and PerpetualYieldToken to vault share tokens.
-    /// The amount of PT and PYT burned will be equal to the underlying token amount.
+    /// @notice Converts NegativeYieldToken and PerpetualYieldToken to vault share tokens.
+    /// The amount of NYT and PYT burned will be equal to the underlying token amount.
     /// @dev Only available if vault shares are transferrable ERC20 tokens.
-    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// revert.
-    /// @param recipient The recipient of the minted PT and PYT
-    /// @param vault The vault to mint PT and PYT for
+    /// @param recipient The recipient of the minted NYT and PYT
+    /// @param vault The vault to mint NYT and PYT for
     /// @param vaultSharesAmount The amount of vault share tokens requested
-    /// @return burnAmount The amount of PT and PYT burned (the amounts are equal)
+    /// @return burnAmount The amount of NYT and PYT burned (the amounts are equal)
     function exitToVaultShares(
         address recipient,
         address vault,
@@ -347,9 +347,9 @@ abstract contract Gate {
             revert Error_VaultSharesNotERC20();
         }
 
-        PrincipalToken pt = getPrincipalTokenForVault(vault);
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        if (address(pt).code.length == 0) {
+        if (address(nyt).code.length == 0) {
             revert Error_TokenPairNotDeployed();
         }
 
@@ -357,18 +357,18 @@ abstract contract Gate {
         /// State updates
         /// -----------------------------------------------------------------------
 
-        uint8 underlyingDecimals = pt.decimals();
+        uint8 underlyingDecimals = nyt.decimals();
 
         // accrue yield
         _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
 
-        // burn PTs and PYTs
+        // burn NYTs and PYTs
         burnAmount = _vaultSharesAmountToUnderlyingAmount(
             vault,
             vaultSharesAmount,
             underlyingDecimals
         );
-        pt.gateBurn(msg.sender, burnAmount);
+        nyt.gateBurn(msg.sender, burnAmount);
         pyt.gateBurn(msg.sender, burnAmount);
 
         /// -----------------------------------------------------------------------
@@ -381,20 +381,20 @@ abstract contract Gate {
         emit ExitToVaultShares(msg.sender, recipient, vault, vaultSharesAmount);
     }
 
-    /// @notice Deploys the PrincipalToken and PerpetualYieldToken associated with a vault.
+    /// @notice Deploys the NegativeYieldToken and PerpetualYieldToken associated with a vault.
     /// @dev Will revert if they have already been deployed.
-    /// @param vault The vault to deploy PT and PYT for
-    /// @return pt The deployed PrincipalToken
+    /// @param vault The vault to deploy NYT and PYT for
+    /// @return nyt The deployed NegativeYieldToken
     /// @return pyt The deployed PerpetualYieldToken
     function deployTokenPairForVault(address vault)
         public
         virtual
-        returns (PrincipalToken pt, PerpetualYieldToken pyt)
+        returns (NegativeYieldToken nyt, PerpetualYieldToken pyt)
     {
-        // Use the CREATE2 opcode to deploy new PrincipalToken and PerpetualYieldToken contracts.
+        // Use the CREATE2 opcode to deploy new NegativeYieldToken and PerpetualYieldToken contracts.
         // This will revert if the contracts have already been deployed,
         // as the salt would be the same and we can't deploy with it twice.
-        pt = new PrincipalToken{salt: vault.fillLast12Bytes()}(
+        nyt = new NegativeYieldToken{salt: vault.fillLast12Bytes()}(
             address(this),
             vault
         );
@@ -403,11 +403,11 @@ abstract contract Gate {
             vault
         );
 
-        emit DeployTokenPairForVault(vault, pt, pyt);
+        emit DeployTokenPairForVault(vault, nyt, pyt);
     }
 
     /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender, in the underlying token.
-    /// @dev If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// @dev If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// revert.
     /// @param recipient The recipient of the yield
     /// @param vault The vault to claim yield from
@@ -483,7 +483,7 @@ abstract contract Gate {
 
     /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender, in vault shares.
     /// @dev Only available if vault shares are transferrable ERC20 tokens.
-    /// If the PT and PYT for the specified vault haven't been deployed yet, this call will
+    /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// revert.
     /// @param recipient The recipient of the yield
     /// @param vault The vault to claim yield from
@@ -563,18 +563,18 @@ abstract contract Gate {
     /// Getters
     /// -----------------------------------------------------------------------
 
-    /// @notice Returns the PrincipalToken associated with a vault.
+    /// @notice Returns the NegativeYieldToken associated with a vault.
     /// @dev Returns non-zero value even if the contract hasn't been deployed yet.
     /// @param vault The vault to query
-    /// @return The PrincipalToken address
-    function getPrincipalTokenForVault(address vault)
+    /// @return The NegativeYieldToken address
+    function getNegativeYieldTokenForVault(address vault)
         public
         view
         virtual
-        returns (PrincipalToken)
+        returns (NegativeYieldToken)
     {
         return
-            PrincipalToken(
+            NegativeYieldToken(
                 keccak256(
                     abi.encodePacked(
                         // Prefix:
@@ -587,7 +587,7 @@ abstract contract Gate {
                         keccak256(
                             abi.encodePacked(
                                 // Deployment bytecode:
-                                type(PrincipalToken).creationCode,
+                                type(NegativeYieldToken).creationCode,
                                 // Constructor arguments:
                                 abi.encode(address(this), vault)
                             )
@@ -707,19 +707,19 @@ abstract contract Gate {
     /// to represent shares, false otherwise.
     function vaultSharesIsERC20() public pure virtual returns (bool);
 
-    /// @notice Computes the ERC20 name of the PrincipalToken of a vault.
+    /// @notice Computes the ERC20 name of the NegativeYieldToken of a vault.
     /// @param vault The vault to query
     /// @return The ERC20 name
-    function principalTokenName(address vault)
+    function negativeYieldTokenName(address vault)
         external
         view
         virtual
         returns (string memory);
 
-    /// @notice Computes the ERC20 symbol of the PrincipalToken of a vault.
+    /// @notice Computes the ERC20 symbol of the NegativeYieldToken of a vault.
     /// @param vault The vault to query
     /// @return The ERC20 symbol
-    function principalTokenSymbol(address vault)
+    function negativeYieldTokenSymbol(address vault)
         external
         view
         virtual
@@ -734,7 +734,7 @@ abstract contract Gate {
         virtual
         returns (string memory);
 
-    /// @notice Computes the ERC20 symbol of the PrincipalToken of a vault.
+    /// @notice Computes the ERC20 symbol of the NegativeYieldToken of a vault.
     /// @param vault The vault to query
     /// @return The ERC20 symbol
     function perpetualYieldTokenSymbol(address vault)
