@@ -2,11 +2,8 @@
 pragma solidity ^0.8.4;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 contract TestYearnVault is ERC20 {
-    using FixedPointMathLib for uint256;
-
     ERC20 public immutable token;
     uint256 public immutable BASE_UNIT;
 
@@ -19,7 +16,7 @@ contract TestYearnVault is ERC20 {
 
     function deposit(uint256 tokenAmount) public returns (uint256 shareAmount) {
         uint256 sharePrice = pricePerShare();
-        shareAmount = tokenAmount.fdiv(sharePrice, BASE_UNIT);
+        shareAmount = (tokenAmount * BASE_UNIT) / sharePrice;
         _mint(msg.sender, shareAmount);
 
         token.transferFrom(msg.sender, address(this), tokenAmount);
@@ -30,7 +27,7 @@ contract TestYearnVault is ERC20 {
         returns (uint256 underlyingAmount)
     {
         uint256 sharePrice = pricePerShare();
-        underlyingAmount = sharesAmount.fmul(sharePrice, BASE_UNIT);
+        underlyingAmount = (sharesAmount * sharePrice) / BASE_UNIT;
         _burn(msg.sender, sharesAmount);
 
         token.transfer(msg.sender, underlyingAmount);
@@ -41,7 +38,7 @@ contract TestYearnVault is ERC20 {
         returns (uint256 underlyingAmount)
     {
         uint256 sharePrice = pricePerShare();
-        underlyingAmount = sharesAmount.fmul(sharePrice, BASE_UNIT);
+        underlyingAmount = (sharesAmount * sharePrice) / BASE_UNIT;
         _burn(msg.sender, sharesAmount);
 
         token.transfer(recipient, underlyingAmount);
@@ -52,6 +49,6 @@ contract TestYearnVault is ERC20 {
         if (totalSupply_ == 0) {
             return BASE_UNIT;
         }
-        return token.balanceOf(address(this)).fdiv(totalSupply_, BASE_UNIT);
+        return (token.balanceOf(address(this)) * BASE_UNIT) / totalSupply_;
     }
 }
