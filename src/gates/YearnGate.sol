@@ -203,11 +203,21 @@ contract YearnGate is Gate {
         if (pytTotalSupply == 0) {
             return yieldPerTokenStored[vault];
         }
-        uint256 newYieldAccrued = FullMath.mulDiv(
-            (updatedPricePerVaultShare - pricePerVaultShareStored[vault]),
-            getVaultShareBalance(vault),
-            10**underlyingDecimals
-        );
+        uint256 pricePerVaultShareStored_ = pricePerVaultShareStored[vault];
+        if (updatedPricePerVaultShare <= pricePerVaultShareStored_) {
+            // rounding error in vault share or no yield accrued
+            return yieldPerTokenStored[vault];
+        }
+        uint256 underlyingPrecision = 10**underlyingDecimals;
+        uint256 newYieldAccrued;
+        unchecked {
+            // can't underflow since we know updatedPricePerVaultShare > pricePerVaultShareStored_
+            newYieldAccrued = FullMath.mulDiv(
+                updatedPricePerVaultShare - pricePerVaultShareStored_,
+                getVaultShareBalance(vault),
+                underlyingPrecision
+            );
+        }
         return
             yieldPerTokenStored[vault] +
             FullMath.mulDiv(newYieldAccrued, PRECISION, pytTotalSupply);

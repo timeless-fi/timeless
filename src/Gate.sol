@@ -642,6 +642,11 @@ abstract contract Gate {
         returns (uint256)
     {
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
+        if (userYieldPerTokenStored_ == 0) {
+            // uninitialized account
+            return 0;
+        }
         return
             _getClaimableYieldAmount(
                 vault,
@@ -653,7 +658,7 @@ abstract contract Gate {
                     getPricePerVaultShare(vault),
                     pyt.decimals()
                 ),
-                userYieldPerTokenStored[vault][user]
+                userYieldPerTokenStored_
             );
     }
 
@@ -847,6 +852,7 @@ abstract contract Gate {
     }
 
     /// @dev Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
+    /// Assumes userYieldPerTokenStored_ != 0.
     function _getClaimableYieldAmount(
         address vault,
         PerpetualYieldToken pyt,
@@ -854,12 +860,22 @@ abstract contract Gate {
         uint256 updatedYieldPerToken,
         uint256 userYieldPerTokenStored_
     ) internal view virtual returns (uint256) {
-        return
-            FullMath.mulDiv(
-                pyt.balanceOf(user),
-                updatedYieldPerToken - (userYieldPerTokenStored_ - 1),
-                PRECISION
-            ) + userAccruedYield[vault][user];
+        unchecked {
+            // the stored value is shifted by one
+            uint256 actualUserYieldPerToken = userYieldPerTokenStored_ - 1;
+
+            // updatedYieldPerToken - actualUserYieldPerToken won't underflow since we check updatedYieldPerToken > actualUserYieldPerToken
+            // + userAccruedYield[vault][user] won't overflow since the sum is at most the totalSupply of the vault's underlying, which
+            // is at most 256 bits.
+            return
+                FullMath.mulDiv(
+                    pyt.balanceOf(user),
+                    updatedYieldPerToken > actualUserYieldPerToken
+                        ? updatedYieldPerToken - actualUserYieldPerToken
+                        : 0,
+                    PRECISION
+                ) + userAccruedYield[vault][user];
+        }
     }
 
     /// @dev Deposits underlying tokens into a vault
