@@ -4,13 +4,21 @@ pragma solidity ^0.8.4;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Gate} from "../../Gate.sol";
+import {FullMath} from "../../lib/FullMath.sol";
 import {YearnGate} from "../../gates/YearnGate.sol";
 import {BaseGateTest} from "../base/BaseGateTest.sol";
 import {TestYearnVault} from "../mocks/TestYearnVault.sol";
 
 contract YearnGateTest is BaseGateTest {
     function _deployGate() internal virtual override returns (Gate gate_) {
-        return new YearnGate();
+        return
+            new YearnGate(
+                address(this),
+                Gate.ProtocolFeeInfo({
+                    fee: uint8(PROTOCOL_FEE),
+                    recipient: protocolFeeRecipient
+                })
+            );
     }
 
     function _deployVault(ERC20 underlying)
@@ -65,5 +73,31 @@ contract YearnGateTest is BaseGateTest {
         returns (string memory)
     {
         return unicode"∞-yTEST-PYT";
+    }
+
+    function _vaultSharesAmountToUnderlyingAmount(
+        address vault,
+        uint256 vaultSharesAmount,
+        uint8 underlyingDecimals
+    ) internal view virtual override returns (uint256) {
+        return
+            FullMath.mulDiv(
+                vaultSharesAmount,
+                gate.getPricePerVaultShare(vault),
+                10**underlyingDecimals
+            );
+    }
+
+    function _underlyingAmountToVaultSharesAmount(
+        address vault,
+        uint256 underlyingAmount,
+        uint8 underlyingDecimals
+    ) internal view virtual override returns (uint256) {
+        return
+            FullMath.mulDiv(
+                underlyingAmount,
+                10**underlyingDecimals,
+                gate.getPricePerVaultShare(vault)
+            );
     }
 }

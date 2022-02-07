@@ -20,6 +20,14 @@ contract YearnGate is Gate {
     using SafeTransferLib for ERC20;
 
     /// -----------------------------------------------------------------------
+    /// Initialization
+    /// -----------------------------------------------------------------------
+
+    constructor(address initialOwner, ProtocolFeeInfo memory protocolFeeInfo_)
+        Gate(initialOwner, protocolFeeInfo_)
+    {}
+
+    /// -----------------------------------------------------------------------
     /// Getters
     /// -----------------------------------------------------------------------
 
@@ -154,13 +162,23 @@ contract YearnGate is Gate {
         address recipient,
         address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals
+        uint8 underlyingDecimals,
+        bool checkBalance
     ) internal virtual override {
         uint256 shareAmount = FullMath.mulDiv(
             underlyingAmount,
             10**underlyingDecimals,
             getPricePerVaultShare(vault)
         );
+
+        if (checkBalance) {
+            uint256 shareBalance = getVaultShareBalance(vault);
+            if (shareAmount > shareBalance) {
+                // rounding error, withdraw entire balance
+                shareAmount = shareBalance;
+            }
+        }
+
         YearnVault(vault).withdraw(shareAmount, recipient);
     }
 

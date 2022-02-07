@@ -5,6 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
+import {Ownable} from "./lib/Ownable.sol";
 import {FullMath} from "./lib/FullMath.sol";
 import {NegativeYieldToken} from "./NegativeYieldToken.sol";
 import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
@@ -26,7 +27,7 @@ import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 ///    each vault share can be redeemed for.
 /// 5) If vault shares are represented using an ERC20 token, then the ERC20 token contract must be
 ///    the vault contract itself.
-abstract contract Gate {
+abstract contract Gate is Ownable {
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
@@ -39,6 +40,7 @@ abstract contract Gate {
     /// Errors
     /// -----------------------------------------------------------------------
 
+    error Error_ProtocolFeeRecipientIsZero();
     error Error_VaultSharesNotERC20();
     error Error_TokenPairNotDeployed();
     error Error_SenderNotPerpetualYieldToken();
@@ -88,6 +90,7 @@ abstract contract Gate {
         NegativeYieldToken nyt,
         PerpetualYieldToken pyt
     );
+    event SetProtocolFee(ProtocolFeeInfo protocolFeeInfo_);
 
     /// -----------------------------------------------------------------------
     /// Constants
@@ -99,6 +102,13 @@ abstract contract Gate {
     /// -----------------------------------------------------------------------
     /// Storage variables
     /// -----------------------------------------------------------------------
+
+    struct ProtocolFeeInfo {
+        uint8 fee; // each increment represents 0.1%, so max is 25.5%
+        address recipient;
+    }
+    /// @notice The protocol fee and the fee recipient address.
+    ProtocolFeeInfo public protocolFeeInfo;
 
     /// @notice The amount of underlying tokens each vault share is worth, at the time of the last update.
     /// @dev vault => value
@@ -120,6 +130,23 @@ abstract contract Gate {
     /// with the gate/PYT (without calling claimYieldInUnderlying()).
     /// @dev vault => user => value
     mapping(address => mapping(address => uint256)) public userAccruedYield;
+
+    /// -----------------------------------------------------------------------
+    /// Initialization
+    /// -----------------------------------------------------------------------
+
+    constructor(address initialOwner, ProtocolFeeInfo memory protocolFeeInfo_) {
+        _transferOwnership(initialOwner);
+
+        if (
+            protocolFeeInfo_.fee != 0 &&
+            protocolFeeInfo_.recipient == address(0)
+        ) {
+            revert Error_ProtocolFeeRecipientIsZero();
+        }
+        protocolFeeInfo = protocolFeeInfo_;
+        emit SetProtocolFee(protocolFeeInfo_);
+    }
 
     /// -----------------------------------------------------------------------
     /// User actions
@@ -310,11 +337,14 @@ abstract contract Gate {
         /// -----------------------------------------------------------------------
 
         // withdraw underlying from vault to recipient
+        // don't check balance since user can just withdraw slightly less
+        // saves gas this way
         _withdrawFromVault(
             recipient,
             vault,
             underlyingAmount,
-            underlyingDecimals
+            underlyingDecimals,
+            false
         );
 
         emit ExitToUnderlying(msg.sender, recipient, vault, underlyingAmount);
@@ -457,19 +487,59 @@ abstract contract Gate {
         userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
 
         // withdraw yield
-        if (yieldAmount > 0) {
+        if (yieldAmount != 0) {
             userAccruedYield[vault][msg.sender] = 0;
 
             /// -----------------------------------------------------------------------
             /// Effects
             /// -----------------------------------------------------------------------
 
+            ProtocolFeeInfo memory protocolFeeInfo_ = protocolFeeInfo;
+            uint256 fee = protocolFeeInfo_.fee;
+
+            if (fee != 0) {
+                uint256 protocolFee = (yieldAmount * fee) / 1000;
+                unchecked {
+                    // can't underflow since fee < 256
+                    yieldAmount -= protocolFee;
+                }
+
+                if (vaultSharesIsERC20()) {
+                    // vault shares are in ERC20
+                    // do share transfer
+                    protocolFee = _underlyingAmountToVaultSharesAmount(
+                        vault,
+                        protocolFee,
+                        underlyingDecimals
+                    );
+                    ERC20(vault).safeTransfer(
+                        protocolFeeInfo_.recipient,
+                        protocolFee
+                    );
+                } else {
+                    // vault shares are not in ERC20
+                    // withdraw underlying from vault
+                    // checkBalance is set to false since we know there will
+                    // still be nonnegligible vault shares after this
+                    _withdrawFromVault(
+                        protocolFeeInfo_.recipient,
+                        vault,
+                        protocolFee,
+                        underlyingDecimals,
+                        false
+                    );
+                }
+            }
+
             // withdraw underlying to recipient
+            // checkBalance is set to true to prevent getting stuck
+            // due to rounding errors
             _withdrawFromVault(
                 recipient,
                 vault,
                 yieldAmount,
-                underlyingDecimals
+                underlyingDecimals,
+                true
             );
 
             emit ClaimYieldInUnderlying(
@@ -496,6 +566,11 @@ abstract contract Gate {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
+
+        // only supported if vault shares are ERC20
+        if (!vaultSharesIsERC20()) {
+            revert Error_VaultSharesNotERC20();
+        }
 
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         if (address(pyt).code.length == 0) {
@@ -533,7 +608,7 @@ abstract contract Gate {
         userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
 
         // withdraw yield
-        if (yieldAmount > 0) {
+        if (yieldAmount != 0) {
             userAccruedYield[vault][msg.sender] = 0;
 
             /// -----------------------------------------------------------------------
@@ -547,7 +622,29 @@ abstract contract Gate {
                 underlyingDecimals
             );
 
+            ProtocolFeeInfo memory protocolFeeInfo_ = protocolFeeInfo;
+            uint256 fee = protocolFeeInfo_.fee;
+
+            if (fee != 0) {
+                uint256 protocolFee = (yieldAmount * fee) / 1000;
+                unchecked {
+                    // can't underflow since fee < 256
+                    yieldAmount -= protocolFee;
+                }
+
+                ERC20(vault).safeTransfer(
+                    protocolFeeInfo_.recipient,
+                    protocolFee
+                );
+            }
+
             // transfer vault shares to recipient
+            // check if vault shares is enough to prevent getting stuck
+            // from rounding errors
+            uint256 vaultSharesBalance = getVaultShareBalance(vault);
+            yieldAmount = yieldAmount > vaultSharesBalance
+                ? vaultSharesBalance
+                : yieldAmount;
             ERC20(vault).safeTransfer(recipient, yieldAmount);
 
             emit ClaimYieldInVaultShares(
@@ -749,7 +846,7 @@ abstract contract Gate {
         returns (string memory);
 
     /// -----------------------------------------------------------------------
-    /// PYT transfer hooks
+    /// PYT transfer hook
     /// -----------------------------------------------------------------------
 
     /// @notice SHOULD NOT BE CALLED BY USERS, ONLY CALLED BY PERPETUAL YIELD TOKEN CONTRACTS
@@ -816,6 +913,25 @@ abstract contract Gate {
             );
         }
         userYieldPerTokenStored[vault][to] = updatedYieldPerToken + 1;
+    }
+
+    /// -----------------------------------------------------------------------
+    /// Owner functions
+    /// -----------------------------------------------------------------------
+
+    function ownerSetProtocolFee(ProtocolFeeInfo calldata protocolFeeInfo_)
+        external
+        onlyOwner
+    {
+        if (
+            protocolFeeInfo_.fee != 0 &&
+            protocolFeeInfo_.recipient == address(0)
+        ) {
+            revert Error_ProtocolFeeRecipientIsZero();
+        }
+        protocolFeeInfo = protocolFeeInfo_;
+
+        emit SetProtocolFee(protocolFeeInfo_);
     }
 
     /// -----------------------------------------------------------------------
@@ -893,11 +1009,14 @@ abstract contract Gate {
     /// @param vault The vault to withdraw from
     /// @param underlyingAmount The amount of tokens to withdraw
     /// @param underlyingDecimals The number of decimals used by the underlying token
+    /// @param checkBalance Set to true to withdraw the entire balance if we're trying
+    /// to withdraw more than the balance (due to rounding errors)
     function _withdrawFromVault(
         address recipient,
         address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals
+        uint8 underlyingDecimals,
+        bool checkBalance
     ) internal virtual;
 
     /// @dev Converts a vault share amount into an equivalent underlying asset amount

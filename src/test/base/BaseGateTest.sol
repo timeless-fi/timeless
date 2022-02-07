@@ -21,6 +21,8 @@ abstract contract BaseGateTest is BaseTest {
     address internal constant tester1 = address(0xabcd);
     address internal constant recipient = address(0xbeef);
     address internal constant initialDepositor = address(0x420);
+    address internal constant protocolFeeRecipient = address(0x6969);
+    uint256 internal constant PROTOCOL_FEE = 100; // 10%
 
     /// -----------------------------------------------------------------------
     /// Setup
@@ -380,29 +382,58 @@ abstract contract BaseGateTest is BaseTest {
         uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(vault);
         underlying.mint(vault, additionalYieldAmount);
         uint256 afterPricePerVaultShare = gate.getPricePerVaultShare(vault);
+        uint256 expectedYield = (FullMath.mulDiv(
+            underlyingAmount,
+            afterPricePerVaultShare - beforePricePerVaultShare,
+            beforePricePerVaultShare
+        ) * (1000 - PROTOCOL_FEE)) / 1000;
+        uint256 expectedFee = (expectedYield * PROTOCOL_FEE) /
+            (1000 - PROTOCOL_FEE);
+        if (gate.vaultSharesIsERC20()) {
+            // fee paid in vault shares
+            expectedFee = _underlyingAmountToVaultSharesAmount(
+                vault,
+                expectedFee,
+                underlyingDecimals
+            );
+        }
 
         // claim yield
         uint256 claimedYield = gate.claimYieldInUnderlying(recipient, vault);
 
         // check received yield
-        uint256 expectedYield = FullMath.mulDiv(
-            underlyingAmount,
-            afterPricePerVaultShare - beforePricePerVaultShare,
-            beforePricePerVaultShare
-        );
-        uint256 epsilonInv = 10**10;
-        assertEqDecimalEpsilonBelow(
+        uint256 epsilonInv = 10**18;
+        assertEqDecimalEpsilonAround(
             claimedYield,
             expectedYield,
             underlyingDecimals,
             epsilonInv
         );
-        assertEqDecimalEpsilonBelow(
+        assertEqDecimalEpsilonAround(
             underlying.balanceOf(recipient),
             claimedYield,
             underlyingDecimals,
             epsilonInv
         );
+
+        // check protocol fee
+        if (gate.vaultSharesIsERC20()) {
+            // check vault balance
+            assertEqDecimalEpsilonAround(
+                ERC20(vault).balanceOf(protocolFeeRecipient),
+                expectedFee,
+                underlyingDecimals,
+                epsilonInv
+            );
+        } else {
+            // check underlying balance
+            assertEqDecimalEpsilonAround(
+                underlying.balanceOf(protocolFeeRecipient),
+                expectedFee,
+                underlyingDecimals,
+                epsilonInv
+            );
+        }
     }
 
     function test_claimYieldInVaultShares(
@@ -459,21 +490,33 @@ abstract contract BaseGateTest is BaseTest {
             afterPricePerVaultShare - beforePricePerVaultShare,
             beforePricePerVaultShare
         );
-        expectedYield = FullMath.mulDiv(
-            expectedYield,
-            10**underlyingDecimals,
-            afterPricePerVaultShare
-        );
-        uint256 epsilonInv = 10**10;
-        assertEqDecimalEpsilonBelow(
+        expectedYield =
+            (_underlyingAmountToVaultSharesAmount(
+                vault,
+                expectedYield,
+                underlyingDecimals
+            ) * (1000 - PROTOCOL_FEE)) /
+            1000;
+        uint256 epsilonInv = 10**18;
+        assertEqDecimalEpsilonAround(
             claimedYield,
             expectedYield,
             underlyingDecimals,
             epsilonInv
         );
-        assertEqDecimalEpsilonBelow(
+        assertEqDecimalEpsilonAround(
             ERC20(vault).balanceOf(recipient),
             claimedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+
+        // check protocol fee
+        uint256 expectedFee = (expectedYield * PROTOCOL_FEE) /
+            (1000 - PROTOCOL_FEE);
+        assertEqDecimalEpsilonAround(
+            ERC20(vault).balanceOf(protocolFeeRecipient),
+            expectedFee,
             underlyingDecimals,
             epsilonInv
         );
@@ -540,11 +583,14 @@ abstract contract BaseGateTest is BaseTest {
                 vault
             );
             underlying.mint(vault, additionalYieldAmount);
-            expectedYield = FullMath.mulDiv(
-                underlyingAmount,
-                gate.getPricePerVaultShare(vault) - beforePricePerVaultShare,
-                beforePricePerVaultShare
-            );
+            expectedYield =
+                (FullMath.mulDiv(
+                    underlyingAmount,
+                    gate.getPricePerVaultShare(vault) -
+                        beforePricePerVaultShare,
+                    beforePricePerVaultShare
+                ) * (1000 - PROTOCOL_FEE)) /
+                1000;
         }
 
         // transfer PYT to tester1
@@ -570,7 +616,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should have received 0
-        epsilonInv = 10**(underlyingDecimals - 1);
+        epsilonInv = 10**(underlyingDecimals - 2);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertLeDecimal(
@@ -652,11 +698,14 @@ abstract contract BaseGateTest is BaseTest {
                 vault
             );
             underlying.mint(vault, additionalYieldAmount);
-            expectedYield = FullMath.mulDiv(
-                underlyingAmount,
-                gate.getPricePerVaultShare(vault) - beforePricePerVaultShare,
-                beforePricePerVaultShare
-            );
+            expectedYield =
+                (FullMath.mulDiv(
+                    underlyingAmount,
+                    gate.getPricePerVaultShare(vault) -
+                        beforePricePerVaultShare,
+                    beforePricePerVaultShare
+                ) * (1000 - PROTOCOL_FEE)) /
+                1000;
         }
 
         // transfer PYT to tester1
@@ -754,11 +803,14 @@ abstract contract BaseGateTest is BaseTest {
                 vault
             );
             underlying.mint(vault, additionalYieldAmount);
-            expectedYield = FullMath.mulDiv(
-                underlyingAmount,
-                gate.getPricePerVaultShare(vault) - beforePricePerVaultShare,
-                beforePricePerVaultShare
-            );
+            expectedYield =
+                (FullMath.mulDiv(
+                    underlyingAmount,
+                    gate.getPricePerVaultShare(vault) -
+                        beforePricePerVaultShare,
+                    beforePricePerVaultShare
+                ) * (1000 - PROTOCOL_FEE)) /
+                1000;
         }
 
         // give tester1 PYT approval
@@ -790,7 +842,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should have received 0
-        epsilonInv = 10**(underlyingDecimals - 1);
+        epsilonInv = 10**(underlyingDecimals - 2);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertLeDecimal(
@@ -872,11 +924,14 @@ abstract contract BaseGateTest is BaseTest {
                 vault
             );
             underlying.mint(vault, additionalYieldAmount);
-            expectedYield = FullMath.mulDiv(
-                underlyingAmount,
-                gate.getPricePerVaultShare(vault) - beforePricePerVaultShare,
-                beforePricePerVaultShare
-            );
+            expectedYield =
+                (FullMath.mulDiv(
+                    underlyingAmount,
+                    gate.getPricePerVaultShare(vault) -
+                        beforePricePerVaultShare,
+                    beforePricePerVaultShare
+                ) * (1000 - PROTOCOL_FEE)) /
+                1000;
         }
 
         // give tester1 PYT approval
@@ -938,6 +993,42 @@ abstract contract BaseGateTest is BaseTest {
         gate.deployTokenPairForVault(vault);
     }
 
+    function testFail_cannotSetProtocolFeeAsRando(
+        Gate.ProtocolFeeInfo memory protocolFeeInfo_
+    ) public {
+        vm.startPrank(tester);
+        gate.ownerSetProtocolFee(protocolFeeInfo_);
+    }
+
+    /// -----------------------------------------------------------------------
+    /// Owner action tests
+    /// -----------------------------------------------------------------------
+
+    function test_ownerSetProtocolFee(
+        Gate.ProtocolFeeInfo memory protocolFeeInfo_
+    ) public {
+        if (
+            protocolFeeInfo_.fee != 0 &&
+            protocolFeeInfo_.recipient == address(0)
+        ) {
+            bytes memory err = new bytes(4);
+            bytes4 expectedErrSelector = bytes4(
+                keccak256("Error_ProtocolFeeRecipientIsZero()")
+            );
+            for (uint256 i = 0; i < 4; i++) {
+                err[i] = expectedErrSelector[i];
+            }
+            vm.expectRevert(err);
+            gate.ownerSetProtocolFee(protocolFeeInfo_);
+        } else {
+            gate.ownerSetProtocolFee(protocolFeeInfo_);
+
+            (uint8 fee, address recipient_) = gate.protocolFeeInfo();
+            assertEq(fee, protocolFeeInfo_.fee);
+            assertEq(recipient_, protocolFeeInfo_.recipient);
+        }
+    }
+
     /// -----------------------------------------------------------------------
     /// Internal utilities
     /// -----------------------------------------------------------------------
@@ -986,4 +1077,16 @@ abstract contract BaseGateTest is BaseTest {
     function _getExpectedPYTName() internal virtual returns (string memory);
 
     function _getExpectedPYTSymbol() internal virtual returns (string memory);
+
+    function _vaultSharesAmountToUnderlyingAmount(
+        address vault,
+        uint256 vaultSharesAmount,
+        uint8 underlyingDecimals
+    ) internal view virtual returns (uint256);
+
+    function _underlyingAmountToVaultSharesAmount(
+        address vault,
+        uint256 underlyingAmount,
+        uint8 underlyingDecimals
+    ) internal view virtual returns (uint256);
 }
