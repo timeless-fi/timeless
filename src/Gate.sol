@@ -919,6 +919,9 @@ abstract contract Gate is Ownable {
     /// Owner functions
     /// -----------------------------------------------------------------------
 
+    /// @notice Updates the protocol fee and/or the protocol fee recipient.
+    /// Only callable by the owner.
+    /// @param protocolFeeInfo_ The new protocol fee info
     function ownerSetProtocolFee(ProtocolFeeInfo calldata protocolFeeInfo_)
         external
         onlyOwner
