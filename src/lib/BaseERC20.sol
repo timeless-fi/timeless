@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.4;
 
-import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC20} from "./ERC20.sol";
 
 import {Gate} from "../Gate.sol";
 
@@ -31,7 +31,7 @@ contract BaseERC20 is ERC20 {
         vault = vault_;
     }
 
-    function gateMint(address to, uint256 amount) external {
+    function gateMint(address to, uint256 amount) external virtual {
         if (msg.sender != gate) {
             revert Error_NotGate();
         }
@@ -39,11 +39,33 @@ contract BaseERC20 is ERC20 {
         _mint(to, amount);
     }
 
-    function gateBurn(address from, uint256 amount) external {
+    function gateBurn(address from, uint256 amount) external virtual {
         if (msg.sender != gate) {
             revert Error_NotGate();
         }
 
         _burn(from, amount);
+    }
+
+    function totalSupply() external view virtual override returns (uint256) {
+        return Gate(gate).yieldTokenTotalSupply(vault);
+    }
+
+    /// @dev Update to total supply is omitted since it's done in the Gate instead.
+    function _mint(address to, uint256 amount) internal virtual override {
+        // Cannot overflow because the sum of all user
+        // balances can't exceed the max uint256 value.
+        unchecked {
+            balanceOf[to] += amount;
+        }
+
+        emit Transfer(address(0), to, amount);
+    }
+
+    /// @dev Update to total supply is omitted since it's done in the Gate instead.
+    function _burn(address from, uint256 amount) internal virtual override {
+        balanceOf[from] -= amount;
+
+        emit Transfer(from, address(0), amount);
     }
 }

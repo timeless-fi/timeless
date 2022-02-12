@@ -981,9 +981,17 @@ abstract contract BaseGateTest is BaseTest {
     function testFail_cannotCallPYTTransferHook(
         address from,
         address to,
-        uint256 amount
+        uint256 amount,
+        uint256 fromAmount,
+        uint256 toAmount
     ) public {
-        gate.beforePerpetualYieldTokenTransfer(from, to, amount);
+        gate.beforePerpetualYieldTokenTransfer(
+            from,
+            to,
+            amount,
+            fromAmount,
+            toAmount
+        );
     }
 
     function testFail_cannotDeployTokensTwice(uint8 underlyingDecimals) public {

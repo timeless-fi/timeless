@@ -131,6 +131,11 @@ abstract contract Gate is Ownable {
     /// @dev vault => user => value
     mapping(address => mapping(address => uint256)) public userAccruedYield;
 
+    /// @notice The total supply of the yield tokens of a certain vault. Since PYTs and NYTs
+    /// are always created in pairs, they always have the same total supply.
+    /// @dev vault => value
+    mapping(address => uint256) public yieldTokenTotalSupply;
+
     /// -----------------------------------------------------------------------
     /// Initialization
     /// -----------------------------------------------------------------------
@@ -193,6 +198,7 @@ abstract contract Gate is Ownable {
 
         // mint NYTs and PYTs
         mintAmount = underlyingAmount;
+        yieldTokenTotalSupply[vault] += mintAmount;
         nyt.gateMint(recipient, mintAmount);
         pyt.gateMint(recipient, mintAmount);
 
@@ -268,6 +274,7 @@ abstract contract Gate is Ownable {
             vaultSharesAmount,
             underlyingDecimals
         );
+        yieldTokenTotalSupply[vault] += mintAmount;
         nyt.gateMint(recipient, mintAmount);
         pyt.gateMint(recipient, mintAmount);
 
@@ -329,6 +336,11 @@ abstract contract Gate is Ownable {
 
         // burn NYTs and PYTs
         burnAmount = underlyingAmount;
+        unchecked {
+            // Cannot underflow because a user's balance
+            // will never be larger than the total supply.
+            yieldTokenTotalSupply[vault] -= burnAmount;
+        }
         nyt.gateBurn(msg.sender, burnAmount);
         pyt.gateBurn(msg.sender, burnAmount);
 
@@ -398,6 +410,11 @@ abstract contract Gate is Ownable {
             vaultSharesAmount,
             underlyingDecimals
         );
+        unchecked {
+            // Cannot underflow because a user's balance
+            // will never be larger than the total supply.
+            yieldTokenTotalSupply[vault] -= burnAmount;
+        }
         nyt.gateBurn(msg.sender, burnAmount);
         pyt.gateBurn(msg.sender, burnAmount);
 
@@ -466,7 +483,6 @@ abstract contract Gate is Ownable {
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
-            pyt,
             updatedPricePerVaultShare,
             underlyingDecimals
         );
@@ -479,7 +495,8 @@ abstract contract Gate is Ownable {
                 pyt,
                 msg.sender,
                 updatedYieldPerToken,
-                userYieldPerTokenStored_
+                userYieldPerTokenStored_,
+                pyt.balanceOf(msg.sender)
             );
         }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
@@ -587,7 +604,6 @@ abstract contract Gate is Ownable {
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
-            pyt,
             updatedPricePerVaultShare,
             underlyingDecimals
         );
@@ -600,7 +616,8 @@ abstract contract Gate is Ownable {
                 pyt,
                 msg.sender,
                 updatedYieldPerToken,
-                userYieldPerTokenStored_
+                userYieldPerTokenStored_,
+                pyt.balanceOf(msg.sender)
             );
         }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
@@ -751,11 +768,11 @@ abstract contract Gate is Ownable {
                 user,
                 _computeYieldPerToken(
                     vault,
-                    pyt,
                     getPricePerVaultShare(vault),
                     pyt.decimals()
                 ),
-                userYieldPerTokenStored_
+                userYieldPerTokenStored_,
+                pyt.balanceOf(user)
             );
     }
 
@@ -772,7 +789,6 @@ abstract contract Gate is Ownable {
         return
             _computeYieldPerToken(
                 vault,
-                pyt,
                 getPricePerVaultShare(vault),
                 pyt.decimals()
             );
@@ -854,10 +870,14 @@ abstract contract Gate is Ownable {
     /// accrue the yield earned by the from & to accounts
     /// @param from The token transfer from account
     /// @param to The token transfer to account
+    /// @param fromBalance The token balance of the from account before the transfer
+    /// @param toBalance The token balance of the to account before the transfer
     function beforePerpetualYieldTokenTransfer(
         address from,
         address to,
-        uint256 amount
+        uint256 amount,
+        uint256 fromBalance,
+        uint256 toBalance
     ) external virtual {
         /// -----------------------------------------------------------------------
         /// Validation
@@ -881,7 +901,6 @@ abstract contract Gate is Ownable {
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
-            pyt,
             updatedPricePerVaultShare,
             pyt.decimals()
         );
@@ -895,7 +914,8 @@ abstract contract Gate is Ownable {
             pyt,
             from,
             updatedYieldPerToken,
-            userYieldPerTokenStored[vault][from]
+            userYieldPerTokenStored[vault][from],
+            fromBalance
         );
         userYieldPerTokenStored[vault][from] = updatedYieldPerToken + 1;
 
@@ -909,7 +929,8 @@ abstract contract Gate is Ownable {
                 pyt,
                 to,
                 updatedYieldPerToken,
-                toUserYieldPerTokenStored
+                toUserYieldPerTokenStored,
+                toBalance
             );
         }
         userYieldPerTokenStored[vault][to] = updatedYieldPerToken + 1;
@@ -951,7 +972,6 @@ abstract contract Gate is Ownable {
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
-            pyt,
             updatedPricePerVaultShare,
             underlyingDecimals
         );
@@ -962,7 +982,8 @@ abstract contract Gate is Ownable {
                 pyt,
                 user,
                 updatedYieldPerToken,
-                userYieldPerTokenStored_
+                userYieldPerTokenStored_,
+                pyt.balanceOf(user)
             );
         }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
@@ -977,7 +998,8 @@ abstract contract Gate is Ownable {
         PerpetualYieldToken pyt,
         address user,
         uint256 updatedYieldPerToken,
-        uint256 userYieldPerTokenStored_
+        uint256 userYieldPerTokenStored_,
+        uint256 userPYTBalance
     ) internal view virtual returns (uint256) {
         unchecked {
             // the stored value is shifted by one
@@ -988,7 +1010,7 @@ abstract contract Gate is Ownable {
             // is at most 256 bits.
             return
                 FullMath.mulDiv(
-                    pyt.balanceOf(user),
+                    userPYTBalance,
                     updatedYieldPerToken > actualUserYieldPerToken
                         ? updatedYieldPerToken - actualUserYieldPerToken
                         : 0,
@@ -1039,7 +1061,6 @@ abstract contract Gate is Ownable {
     /// @dev Computes the latest yieldPerToken value for a vault.
     function _computeYieldPerToken(
         address vault,
-        PerpetualYieldToken pyt,
         uint256 updatedPricePerVaultShare,
         uint8 underlyingDecimals
     ) internal view virtual returns (uint256);

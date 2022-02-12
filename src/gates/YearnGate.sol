@@ -213,11 +213,10 @@ contract YearnGate is Gate {
     /// @inheritdoc Gate
     function _computeYieldPerToken(
         address vault,
-        PerpetualYieldToken pyt,
         uint256 updatedPricePerVaultShare,
         uint8 underlyingDecimals
     ) internal view virtual override returns (uint256) {
-        uint256 pytTotalSupply = pyt.totalSupply();
+        uint256 pytTotalSupply = yieldTokenTotalSupply[vault];
         if (pytTotalSupply == 0) {
             return yieldPerTokenStored[vault];
         }
