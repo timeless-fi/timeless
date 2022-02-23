@@ -31,13 +31,13 @@ Timeless is a yield tokenization protocol that offers _Perpetual Yield Tokens_ (
 To install with [DappTools](https://github.com/dapphub/dapptools):
 
 ```
-dapp install ZeframLou/timeless
+dapp install timeless-fi/timeless
 ```
 
 To install with [Foundry](https://github.com/gakonst/foundry):
 
 ```
-forge install ZeframLou/timeless
+forge install timeless-fi/timeless
 ```
 
 ## Local development
