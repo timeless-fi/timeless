@@ -1060,6 +1060,7 @@ abstract contract Gate is Ownable {
     /// @param vault The vault to withdraw from
     /// @param underlyingAmount The amount of tokens to withdraw
     /// @param underlyingDecimals The number of decimals used by the underlying token
+    /// @param pricePerVaultShare The latest price per vault share value
     /// @param checkBalance Set to true to withdraw the entire balance if we're trying
     /// to withdraw more than the balance (due to rounding errors)
     /// @return withdrawnUnderlyingAmount The amount of underlying tokens withdrawn
