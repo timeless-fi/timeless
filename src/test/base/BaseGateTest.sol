@@ -181,6 +181,20 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount = initialYieldAmount;
         }
 
+        // bound the initial yield below 100x the initial underlying
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount == 0) {
+            underlyingAmount = 1;
+        }
+
         (TestERC20 underlying, address vault) = _setUpVault(
             underlyingDecimals,
             initialUnderlyingAmount,
@@ -194,6 +208,23 @@ abstract contract BaseGateTest is BaseTest {
         gate.enterWithUnderlying(tester, vault, underlyingAmount);
 
         // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / pricePerShare).
+        {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
+            uint192 minYieldAmount = uint192(
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
+        }
         underlying.mint(vault, additionalYieldAmount);
 
         // exit
@@ -246,12 +277,27 @@ abstract contract BaseGateTest is BaseTest {
 
         vm.startPrank(tester);
 
-        // bound between 0 and 18
-        underlyingDecimals %= 19;
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
 
         if (initialUnderlyingAmount == 0 && initialYieldAmount != 0) {
             // don't give tester free yield
             initialUnderlyingAmount = initialYieldAmount;
+        }
+
+        // bound the initial yield below 100x the initial underlying
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount == 0) {
+            underlyingAmount = 1;
         }
 
         (TestERC20 underlying, address vault) = _setUpVault(
@@ -267,6 +313,23 @@ abstract contract BaseGateTest is BaseTest {
         gate.enterWithUnderlying(tester, vault, underlyingAmount);
 
         // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / pricePerShare).
+        {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
+            uint192 minYieldAmount = uint192(
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
+        }
         underlying.mint(vault, additionalYieldAmount);
 
         // exit
@@ -282,7 +345,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // check balances
-        uint256 epsilonInv = 10**52;
+        uint256 epsilonInv = min(10**(underlyingDecimals - 2), 10**6);
         // vault shares transferred to tester
         assertEqDecimalEpsilonBelow(
             ERC20(vault).balanceOf(recipient),
@@ -349,8 +412,23 @@ abstract contract BaseGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        // bound between 0 and 18
-        underlyingDecimals %= 19;
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
+
+        // bound the initial yield below 100x the initial underlying
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount < 10**underlyingDecimals) {
+            underlyingAmount = uint192(10**underlyingDecimals);
+        }
 
         (TestERC20 underlying, address vault) = _setUpVault(
             underlyingDecimals,
@@ -369,11 +447,14 @@ abstract contract BaseGateTest is BaseTest {
         // of its pricePerShare. namely, the yield should be at least the current amount of underlying
         // times (1 / pricePerShare).
         {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
             uint192 minYieldAmount = uint192(
-                (uint256(underlyingAmount) +
-                    uint256(initialUnderlyingAmount) +
-                    uint256(initialYieldAmount)) /
-                    gate.getPricePerVaultShare(vault)
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
             );
             if (additionalYieldAmount < minYieldAmount) {
                 additionalYieldAmount = minYieldAmount;
@@ -402,7 +483,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 claimedYield = gate.claimYieldInUnderlying(recipient, vault);
 
         // check received yield
-        uint256 epsilonInv = 10**18;
+        uint256 epsilonInv = min(10**(underlyingDecimals - 3), 10**6);
         assertEqDecimalEpsilonAround(
             claimedYield,
             expectedYield,
@@ -447,8 +528,23 @@ abstract contract BaseGateTest is BaseTest {
 
         vm.startPrank(tester);
 
-        // bound between 0 and 18
-        underlyingDecimals %= 19;
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
+
+        // bound the initial yield below 100x the initial underlying
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount < 10**underlyingDecimals) {
+            underlyingAmount = uint192(10**underlyingDecimals);
+        }
 
         (TestERC20 underlying, address vault) = _setUpVault(
             underlyingDecimals,
@@ -467,24 +563,24 @@ abstract contract BaseGateTest is BaseTest {
         // of its pricePerShare. namely, the yield should be at least the current amount of underlying
         // times (1 / pricePerShare).
         {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
             uint192 minYieldAmount = uint192(
-                (uint256(underlyingAmount) +
-                    uint256(initialUnderlyingAmount) +
-                    uint256(initialYieldAmount)) /
-                    gate.getPricePerVaultShare(vault)
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
             );
             if (additionalYieldAmount < minYieldAmount) {
                 additionalYieldAmount = minYieldAmount;
             }
         }
+
         uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(vault);
         underlying.mint(vault, additionalYieldAmount);
         uint256 afterPricePerVaultShare = gate.getPricePerVaultShare(vault);
 
-        // claim yield
-        uint256 claimedYield = gate.claimYieldInVaultShares(recipient, vault);
-
-        // check received yield
         uint256 expectedYield = FullMath.mulDiv(
             underlyingAmount,
             afterPricePerVaultShare - beforePricePerVaultShare,
@@ -497,7 +593,12 @@ abstract contract BaseGateTest is BaseTest {
                 underlyingDecimals
             ) * (1000 - PROTOCOL_FEE)) /
             1000;
-        uint256 epsilonInv = 10**18;
+
+        // claim yield
+        uint256 claimedYield = gate.claimYieldInVaultShares(recipient, vault);
+
+        // check received yield
+        uint256 epsilonInv = min(10**underlyingDecimals, 10**6);
         assertEqDecimalEpsilonAround(
             claimedYield,
             expectedYield,
@@ -532,9 +633,9 @@ abstract contract BaseGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        // bound between 3 and 18
-        underlyingDecimals %= 16;
-        underlyingDecimals += 3;
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
 
         // bound the initial yield below 100x the initial underlying
         if (initialUnderlyingAmount != 0) {
@@ -548,6 +649,11 @@ abstract contract BaseGateTest is BaseTest {
         // bound between 1 and 99
         pytTransferPercent %= 99;
         pytTransferPercent += 1;
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount < 10**underlyingDecimals) {
+            underlyingAmount = uint192(10**underlyingDecimals);
+        }
 
         (TestERC20 underlying, address vault) = _setUpVault(
             underlyingDecimals,
@@ -566,11 +672,14 @@ abstract contract BaseGateTest is BaseTest {
         // of its pricePerShare. namely, the yield should be at least the current amount of underlying
         // times (1 / pricePerShare).
         {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
             uint192 minYieldAmount = uint192(
-                (uint256(underlyingAmount) +
-                    uint256(initialUnderlyingAmount) +
-                    uint256(initialYieldAmount)) /
-                    gate.getPricePerVaultShare(vault)
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
             );
             if (additionalYieldAmount < minYieldAmount) {
                 additionalYieldAmount = minYieldAmount;
@@ -606,7 +715,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received all the yield
-        uint256 epsilonInv = 10**underlyingDecimals;
+        uint256 epsilonInv = min(10**(underlyingDecimals - 3), 10**6);
         assertEqDecimalEpsilonBelow(
             testerClaimedYield,
             expectedYield,
@@ -636,9 +745,9 @@ abstract contract BaseGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        // bound between 3 and 18
-        underlyingDecimals %= 16;
-        underlyingDecimals += 3;
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
 
         // bound the initial yield below 10x the initial underlying
         if (initialUnderlyingAmount != 0) {
@@ -652,6 +761,11 @@ abstract contract BaseGateTest is BaseTest {
         // bound between 1 and 99
         pytTransferPercent %= 99;
         pytTransferPercent += 1;
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount < 10**underlyingDecimals) {
+            underlyingAmount = uint192(10**underlyingDecimals);
+        }
 
         (TestERC20 underlying, address vault) = _setUpVault(
             underlyingDecimals,
@@ -681,11 +795,14 @@ abstract contract BaseGateTest is BaseTest {
         // of its pricePerShare. namely, the yield should be at least the current amount of underlying
         // times (1 / pricePerShare).
         {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
             uint192 minYieldAmount = uint192(
-                (uint256(underlyingAmount) +
-                    uint256(initialUnderlyingAmount) +
-                    uint256(initialYieldAmount)) /
-                    gate.getPricePerVaultShare(vault)
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
             );
             if (additionalYieldAmount < minYieldAmount) {
                 additionalYieldAmount = minYieldAmount;
@@ -721,7 +838,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received the correct amount of yield
-        uint256 epsilonInv = 10**underlyingDecimals;
+        uint256 epsilonInv = min(10**(underlyingDecimals - 3), 10**5);
         assertEqDecimalEpsilonAround(
             testerClaimedYield,
             expectedYield,
@@ -731,7 +848,6 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should've received the correct amount of yield
-        epsilonInv = 10**(underlyingDecimals - 2);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertEqDecimalEpsilonAround(
@@ -752,9 +868,9 @@ abstract contract BaseGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        // bound between 3 and 18
-        underlyingDecimals %= 16;
-        underlyingDecimals += 3;
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
 
         // bound the initial yield below 100x the initial underlying
         if (initialUnderlyingAmount != 0) {
@@ -768,6 +884,11 @@ abstract contract BaseGateTest is BaseTest {
         // bound between 1 and 99
         pytTransferPercent %= 99;
         pytTransferPercent += 1;
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount < 10**underlyingDecimals) {
+            underlyingAmount = uint192(10**underlyingDecimals);
+        }
 
         (TestERC20 underlying, address vault) = _setUpVault(
             underlyingDecimals,
@@ -786,11 +907,14 @@ abstract contract BaseGateTest is BaseTest {
         // of its pricePerShare. namely, the yield should be at least the current amount of underlying
         // times (1 / pricePerShare).
         {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
             uint192 minYieldAmount = uint192(
-                (uint256(underlyingAmount) +
-                    uint256(initialUnderlyingAmount) +
-                    uint256(initialYieldAmount)) /
-                    gate.getPricePerVaultShare(vault)
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
             );
             if (additionalYieldAmount < minYieldAmount) {
                 additionalYieldAmount = minYieldAmount;
@@ -832,7 +956,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received all the yield
-        uint256 epsilonInv = 10**underlyingDecimals;
+        uint256 epsilonInv = min(10**(underlyingDecimals - 3), 10**6);
         assertEqDecimalEpsilonBelow(
             testerClaimedYield,
             expectedYield,
@@ -862,9 +986,9 @@ abstract contract BaseGateTest is BaseTest {
     ) public {
         vm.startPrank(tester);
 
-        // bound between 3 and 18
-        underlyingDecimals %= 16;
-        underlyingDecimals += 3;
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
 
         // bound the initial yield below 10x the initial underlying
         if (initialUnderlyingAmount != 0) {
@@ -878,6 +1002,11 @@ abstract contract BaseGateTest is BaseTest {
         // bound between 1 and 99
         pytTransferPercent %= 99;
         pytTransferPercent += 1;
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount < 10**underlyingDecimals) {
+            underlyingAmount = uint192(10**underlyingDecimals);
+        }
 
         (TestERC20 underlying, address vault) = _setUpVault(
             underlyingDecimals,
@@ -907,11 +1036,14 @@ abstract contract BaseGateTest is BaseTest {
         // of its pricePerShare. namely, the yield should be at least the current amount of underlying
         // times (1 / pricePerShare).
         {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
             uint192 minYieldAmount = uint192(
-                (uint256(underlyingAmount) +
-                    uint256(initialUnderlyingAmount) +
-                    uint256(initialYieldAmount)) /
-                    gate.getPricePerVaultShare(vault)
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
             );
             if (additionalYieldAmount < minYieldAmount) {
                 additionalYieldAmount = minYieldAmount;
@@ -953,7 +1085,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received the correct amount of yield
-        uint256 epsilonInv = 10**underlyingDecimals;
+        uint256 epsilonInv = min(10**(underlyingDecimals - 1), 10**6);
         assertEqDecimalEpsilonAround(
             testerClaimedYield,
             expectedYield,
@@ -963,7 +1095,6 @@ abstract contract BaseGateTest is BaseTest {
 
         // claim yield as tester1
         // should've received the correct amount of yield
-        epsilonInv = 10**(underlyingDecimals - 2);
         vm.stopPrank();
         vm.startPrank(tester1);
         assertEqDecimalEpsilonAround(
@@ -985,6 +1116,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 fromAmount,
         uint256 toAmount
     ) public {
+        if (amount == 0) amount = 1;
         gate.beforePerpetualYieldTokenTransfer(
             from,
             to,

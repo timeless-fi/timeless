@@ -8,6 +8,6 @@ update:; forge update
 # Build & test
 build  :; forge build
 test   :; forge test
-trace   :; forge clean && forge test -vvv
+trace  :; forge test -vvv
 clean  :; forge clean
 snapshot :; forge snapshot

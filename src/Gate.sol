@@ -194,7 +194,13 @@ abstract contract Gate is Ownable {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, recipient, underlyingDecimals);
+        _accrueYield(
+            vault,
+            pyt,
+            recipient,
+            underlyingDecimals,
+            getPricePerVaultShare(vault)
+        );
 
         // mint NYTs and PYTs
         mintAmount = underlyingAmount;
@@ -266,13 +272,20 @@ abstract contract Gate is Ownable {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, recipient, underlyingDecimals);
+        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
+        _accrueYield(
+            vault,
+            pyt,
+            recipient,
+            underlyingDecimals,
+            updatedPricePerVaultShare
+        );
 
         // mint NYTs and PYTs
         mintAmount = _vaultSharesAmountToUnderlyingAmount(
-            vault,
             vaultSharesAmount,
-            underlyingDecimals
+            underlyingDecimals,
+            updatedPricePerVaultShare
         );
         yieldTokenTotalSupply[vault] += mintAmount;
         nyt.gateMint(recipient, mintAmount);
@@ -332,7 +345,13 @@ abstract contract Gate is Ownable {
         uint8 underlyingDecimals = nyt.decimals();
 
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
+        _accrueYield(
+            vault,
+            pyt,
+            msg.sender,
+            underlyingDecimals,
+            getPricePerVaultShare(vault)
+        );
 
         // burn NYTs and PYTs
         burnAmount = underlyingAmount;
@@ -351,11 +370,12 @@ abstract contract Gate is Ownable {
         // withdraw underlying from vault to recipient
         // don't check balance since user can just withdraw slightly less
         // saves gas this way
-        _withdrawFromVault(
+        underlyingAmount = _withdrawFromVault(
             recipient,
             vault,
             underlyingAmount,
             underlyingDecimals,
+            getPricePerVaultShare(vault),
             false
         );
 
@@ -402,13 +422,20 @@ abstract contract Gate is Ownable {
         uint8 underlyingDecimals = nyt.decimals();
 
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender, underlyingDecimals);
+        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
+        _accrueYield(
+            vault,
+            pyt,
+            msg.sender,
+            underlyingDecimals,
+            updatedPricePerVaultShare
+        );
 
         // burn NYTs and PYTs
         burnAmount = _vaultSharesAmountToUnderlyingAmount(
-            vault,
             vaultSharesAmount,
-            underlyingDecimals
+            underlyingDecimals,
+            updatedPricePerVaultShare
         );
         unchecked {
             // Cannot underflow because a user's balance
@@ -492,7 +519,6 @@ abstract contract Gate is Ownable {
         if (userYieldPerTokenStored_ != 0) {
             yieldAmount = _getClaimableYieldAmount(
                 vault,
-                pyt,
                 msg.sender,
                 updatedYieldPerToken,
                 userYieldPerTokenStored_,
@@ -525,37 +551,43 @@ abstract contract Gate is Ownable {
                     // vault shares are in ERC20
                     // do share transfer
                     protocolFee = _underlyingAmountToVaultSharesAmount(
-                        vault,
                         protocolFee,
-                        underlyingDecimals
+                        underlyingDecimals,
+                        updatedPricePerVaultShare
                     );
-                    ERC20(vault).safeTransfer(
-                        protocolFeeInfo_.recipient,
-                        protocolFee
-                    );
+                    if (protocolFee != 0) {
+                        ERC20(vault).safeTransfer(
+                            protocolFeeInfo_.recipient,
+                            protocolFee
+                        );
+                    }
                 } else {
                     // vault shares are not in ERC20
                     // withdraw underlying from vault
                     // checkBalance is set to false since we know there will
                     // still be nonnegligible vault shares after this
-                    _withdrawFromVault(
-                        protocolFeeInfo_.recipient,
-                        vault,
-                        protocolFee,
-                        underlyingDecimals,
-                        false
-                    );
+                    if (protocolFee != 0) {
+                        _withdrawFromVault(
+                            protocolFeeInfo_.recipient,
+                            vault,
+                            protocolFee,
+                            underlyingDecimals,
+                            updatedPricePerVaultShare,
+                            false
+                        );
+                    }
                 }
             }
 
             // withdraw underlying to recipient
             // checkBalance is set to true to prevent getting stuck
             // due to rounding errors
-            _withdrawFromVault(
+            yieldAmount = _withdrawFromVault(
                 recipient,
                 vault,
                 yieldAmount,
                 underlyingDecimals,
+                updatedPricePerVaultShare,
                 true
             );
 
@@ -613,7 +645,6 @@ abstract contract Gate is Ownable {
         if (userYieldPerTokenStored_ != 0) {
             yieldAmount = _getClaimableYieldAmount(
                 vault,
-                pyt,
                 msg.sender,
                 updatedYieldPerToken,
                 userYieldPerTokenStored_,
@@ -634,9 +665,9 @@ abstract contract Gate is Ownable {
 
             // convert yieldAmount to be denominated in vault shares
             yieldAmount = _underlyingAmountToVaultSharesAmount(
-                vault,
                 yieldAmount,
-                underlyingDecimals
+                underlyingDecimals,
+                updatedPricePerVaultShare
             );
 
             ProtocolFeeInfo memory protocolFeeInfo_ = protocolFeeInfo;
@@ -764,7 +795,6 @@ abstract contract Gate is Ownable {
         return
             _getClaimableYieldAmount(
                 vault,
-                pyt,
                 user,
                 _computeYieldPerToken(
                     vault,
@@ -911,7 +941,6 @@ abstract contract Gate is Ownable {
         // so we will always accrue the yield earned by the from account
         userAccruedYield[vault][from] = _getClaimableYieldAmount(
             vault,
-            pyt,
             from,
             updatedYieldPerToken,
             userYieldPerTokenStored[vault][from],
@@ -926,7 +955,6 @@ abstract contract Gate is Ownable {
             // to account has held PYTs before
             userAccruedYield[vault][to] = _getClaimableYieldAmount(
                 vault,
-                pyt,
                 to,
                 updatedYieldPerToken,
                 toUserYieldPerTokenStored,
@@ -967,9 +995,9 @@ abstract contract Gate is Ownable {
         address vault,
         PerpetualYieldToken pyt,
         address user,
-        uint8 underlyingDecimals
+        uint8 underlyingDecimals,
+        uint256 updatedPricePerVaultShare
     ) internal virtual {
-        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
             updatedPricePerVaultShare,
@@ -979,7 +1007,6 @@ abstract contract Gate is Ownable {
         if (userYieldPerTokenStored_ != 0) {
             userAccruedYield[vault][user] = _getClaimableYieldAmount(
                 vault,
-                pyt,
                 user,
                 updatedYieldPerToken,
                 userYieldPerTokenStored_,
@@ -995,7 +1022,6 @@ abstract contract Gate is Ownable {
     /// Assumes userYieldPerTokenStored_ != 0.
     function _getClaimableYieldAmount(
         address vault,
-        PerpetualYieldToken pyt,
         address user,
         uint256 updatedYieldPerToken,
         uint256 userYieldPerTokenStored_,
@@ -1036,27 +1062,29 @@ abstract contract Gate is Ownable {
     /// @param underlyingDecimals The number of decimals used by the underlying token
     /// @param checkBalance Set to true to withdraw the entire balance if we're trying
     /// to withdraw more than the balance (due to rounding errors)
+    /// @return withdrawnUnderlyingAmount The amount of underlying tokens withdrawn
     function _withdrawFromVault(
         address recipient,
         address vault,
         uint256 underlyingAmount,
         uint8 underlyingDecimals,
+        uint256 pricePerVaultShare,
         bool checkBalance
-    ) internal virtual;
+    ) internal virtual returns (uint256 withdrawnUnderlyingAmount);
 
     /// @dev Converts a vault share amount into an equivalent underlying asset amount
     function _vaultSharesAmountToUnderlyingAmount(
-        address vault,
         uint256 vaultSharesAmount,
-        uint8 underlyingDecimals
-    ) internal view virtual returns (uint256);
+        uint8 underlyingDecimals,
+        uint256 pricePerVaultShare
+    ) internal pure virtual returns (uint256);
 
     /// @dev Converts an underlying asset amount into an equivalent vault shares amount
     function _underlyingAmountToVaultSharesAmount(
-        address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals
-    ) internal view virtual returns (uint256);
+        uint8 underlyingDecimals,
+        uint256 pricePerVaultShare
+    ) internal pure virtual returns (uint256);
 
     /// @dev Computes the latest yieldPerToken value for a vault.
     function _computeYieldPerToken(

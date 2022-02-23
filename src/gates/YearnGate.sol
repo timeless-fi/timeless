@@ -163,12 +163,13 @@ contract YearnGate is Gate {
         address vault,
         uint256 underlyingAmount,
         uint8 underlyingDecimals,
+        uint256 pricePerVaultShare,
         bool checkBalance
-    ) internal virtual override {
-        uint256 shareAmount = FullMath.mulDiv(
+    ) internal virtual override returns (uint256 withdrawnUnderlyingAmount) {
+        uint256 shareAmount = _underlyingAmountToVaultSharesAmount(
             underlyingAmount,
-            10**underlyingDecimals,
-            getPricePerVaultShare(vault)
+            underlyingDecimals,
+            pricePerVaultShare
         );
 
         if (checkBalance) {
@@ -179,34 +180,37 @@ contract YearnGate is Gate {
             }
         }
 
-        YearnVault(vault).withdraw(shareAmount, recipient);
+        withdrawnUnderlyingAmount = YearnVault(vault).withdraw(
+            shareAmount,
+            recipient
+        );
     }
 
     /// @inheritdoc Gate
     function _vaultSharesAmountToUnderlyingAmount(
-        address vault,
         uint256 vaultSharesAmount,
-        uint8 underlyingDecimals
-    ) internal view virtual override returns (uint256) {
+        uint8 underlyingDecimals,
+        uint256 pricePerVaultShare
+    ) internal pure virtual override returns (uint256) {
         return
             FullMath.mulDiv(
                 vaultSharesAmount,
-                getPricePerVaultShare(vault),
+                pricePerVaultShare,
                 10**underlyingDecimals
             );
     }
 
     /// @inheritdoc Gate
     function _underlyingAmountToVaultSharesAmount(
-        address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals
-    ) internal view virtual override returns (uint256) {
+        uint8 underlyingDecimals,
+        uint256 pricePerVaultShare
+    ) internal pure virtual override returns (uint256) {
         return
             FullMath.mulDiv(
                 underlyingAmount,
                 10**underlyingDecimals,
-                getPricePerVaultShare(vault)
+                pricePerVaultShare
             );
     }
 
