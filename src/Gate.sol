@@ -939,13 +939,19 @@ abstract contract Gate is Ownable {
 
         // we know the from account must have held PYTs before
         // so we will always accrue the yield earned by the from account
-        userAccruedYield[vault][from] = _getClaimableYieldAmount(
+        uint256 fromClaimableYieldAmount = _getClaimableYieldAmount(
             vault,
             from,
             updatedYieldPerToken,
             userYieldPerTokenStored[vault][from],
             fromBalance
         );
+        uint256 fromAccruedYield = FullMath.mulDiv(
+            fromClaimableYieldAmount,
+            fromBalance - amount,
+            fromBalance
+        );
+        userAccruedYield[vault][from] = fromAccruedYield;
         userYieldPerTokenStored[vault][from] = updatedYieldPerToken + 1;
 
         // the to account might not have held PYTs before
@@ -953,13 +959,21 @@ abstract contract Gate is Ownable {
         uint256 toUserYieldPerTokenStored = userYieldPerTokenStored[vault][to];
         if (toUserYieldPerTokenStored != 0) {
             // to account has held PYTs before
-            userAccruedYield[vault][to] = _getClaimableYieldAmount(
-                vault,
-                to,
-                updatedYieldPerToken,
-                toUserYieldPerTokenStored,
-                toBalance
-            );
+            userAccruedYield[vault][to] =
+                _getClaimableYieldAmount(
+                    vault,
+                    to,
+                    updatedYieldPerToken,
+                    toUserYieldPerTokenStored,
+                    toBalance
+                ) +
+                fromClaimableYieldAmount -
+                fromAccruedYield;
+        } else {
+            // to account hasn't held PYTs before
+            userAccruedYield[vault][to] =
+                fromClaimableYieldAmount -
+                fromAccruedYield;
         }
         userYieldPerTokenStored[vault][to] = updatedYieldPerToken + 1;
     }
