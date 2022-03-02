@@ -6,10 +6,9 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {BaseTest, console} from "../base/BaseTest.sol";
 
 import {Gate} from "../../Gate.sol";
+import {YieldToken} from "../../YieldToken.sol";
 import {FullMath} from "../../lib/FullMath.sol";
 import {TestERC20} from "../mocks/TestERC20.sol";
-import {NegativeYieldToken} from "../../NegativeYieldToken.sol";
-import {PerpetualYieldToken} from "../../PerpetualYieldToken.sol";
 
 abstract contract BaseGateTest is BaseTest {
     /// -----------------------------------------------------------------------
@@ -73,8 +72,8 @@ abstract contract BaseGateTest is BaseTest {
             underlyingDecimals
         );
         // recipient received NYT and PYT
-        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
-        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        YieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
+        YieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimal(
             nyt.balanceOf(recipient),
             underlyingAmount,
@@ -141,8 +140,8 @@ abstract contract BaseGateTest is BaseTest {
             underlyingDecimals
         );
         // recipient received NYT and PYT
-        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
-        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        YieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
+        YieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         uint256 epsilonInv = 10**53;
         assertEqDecimalEpsilonBelow(
             nyt.balanceOf(recipient),
@@ -244,8 +243,8 @@ abstract contract BaseGateTest is BaseTest {
             epsilonInv
         );
         // recipient burnt NYT and PYT
-        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
-        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        YieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
+        YieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimalEpsilonBelow(
             nyt.balanceOf(recipient),
             0,
@@ -354,8 +353,8 @@ abstract contract BaseGateTest is BaseTest {
             epsilonInv
         );
         // recipient burnt NYT and PYT
-        NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
-        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        YieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
+        YieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimalEpsilonBelow(
             nyt.balanceOf(recipient),
             0,
@@ -382,8 +381,7 @@ abstract contract BaseGateTest is BaseTest {
 
         TestERC20 underlying = new TestERC20(underlyingDecimals);
         address vault = _deployVault(underlying);
-        (NegativeYieldToken nyt, PerpetualYieldToken pyt) = gate
-            .deployTokenPairForVault(vault);
+        (YieldToken nyt, YieldToken pyt) = gate.deployTokenPairForVault(vault);
 
         assertEq(
             address(gate.getNegativeYieldTokenForVault(vault)),
@@ -938,7 +936,7 @@ abstract contract BaseGateTest is BaseTest {
         }
 
         // give tester1 PYT approval
-        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        YieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         pyt.approve(tester1, type(uint256).max);
 
         // transfer PYT from tester to tester1, as tester1
@@ -1067,7 +1065,7 @@ abstract contract BaseGateTest is BaseTest {
         }
 
         // give tester1 PYT approval
-        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        YieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         pyt.approve(tester1, type(uint256).max);
 
         // transfer PYT from tester to tester1, as tester1

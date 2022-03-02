@@ -7,7 +7,6 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Gate} from "../Gate.sol";
 import {FullMath} from "../lib/FullMath.sol";
 import {YearnVault} from "../external/YearnVault.sol";
-import {PerpetualYieldToken} from "../PerpetualYieldToken.sol";
 
 /// @title YearnGate
 /// @author zefram.eth

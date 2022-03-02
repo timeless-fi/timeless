@@ -7,8 +7,7 @@ import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
 import {Ownable} from "./lib/Ownable.sol";
 import {FullMath} from "./lib/FullMath.sol";
-import {NegativeYieldToken} from "./NegativeYieldToken.sol";
-import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
+import {YieldToken} from "./YieldToken.sol";
 
 /// @title Gate
 /// @author zefram.eth
@@ -87,8 +86,8 @@ abstract contract Gate is Ownable {
     );
     event DeployTokenPairForVault(
         address indexed vault,
-        NegativeYieldToken nyt,
-        PerpetualYieldToken pyt
+        YieldToken nyt,
+        YieldToken pyt
     );
     event SetProtocolFee(ProtocolFeeInfo protocolFeeInfo_);
 
@@ -179,34 +178,19 @@ abstract contract Gate is Ownable {
             return 0;
         }
 
-        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
-        if (address(nyt).code.length == 0) {
-            // token pair hasn't been deployed yet
-            // do the deployment now
-            // only need to check nyt since nyt and pyt are always deployed in pairs
-            deployTokenPairForVault(vault);
-        }
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        uint8 underlyingDecimals = nyt.decimals();
-
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
-        // accrue yield
-        _accrueYield(
-            vault,
-            pyt,
+        // mint PYT and NYT
+        mintAmount = underlyingAmount;
+        _enter(
             recipient,
-            underlyingDecimals,
+            vault,
+            getUnderlyingOfVault(vault).decimals(),
+            underlyingAmount,
             getPricePerVaultShare(vault)
         );
-
-        // mint NYTs and PYTs
-        mintAmount = underlyingAmount;
-        yieldTokenTotalSupply[vault] += mintAmount;
-        nyt.gateMint(recipient, mintAmount);
-        pyt.gateMint(recipient, mintAmount);
 
         /// -----------------------------------------------------------------------
         /// Effects
@@ -257,39 +241,25 @@ abstract contract Gate is Ownable {
             revert Error_VaultSharesNotERC20();
         }
 
-        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
-        if (address(nyt).code.length == 0) {
-            // token pair hasn't been deployed yet
-            // do the deployment now
-            // only need to check nyt since nyt and pyt are always deployed in pairs
-            deployTokenPairForVault(vault);
-        }
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        uint8 underlyingDecimals = nyt.decimals();
-
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
-        // accrue yield
+        // mint PYT and NYT
+        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        _accrueYield(
-            vault,
-            pyt,
-            recipient,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
-
-        // mint NYTs and PYTs
         mintAmount = _vaultSharesAmountToUnderlyingAmount(
             vaultSharesAmount,
             underlyingDecimals,
             updatedPricePerVaultShare
         );
-        yieldTokenTotalSupply[vault] += mintAmount;
-        nyt.gateMint(recipient, mintAmount);
-        pyt.gateMint(recipient, mintAmount);
+        _enter(
+            recipient,
+            vault,
+            underlyingDecimals,
+            mintAmount,
+            updatedPricePerVaultShare
+        );
 
         /// -----------------------------------------------------------------------
         /// Effects
@@ -332,36 +302,20 @@ abstract contract Gate is Ownable {
             return 0;
         }
 
-        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        if (address(nyt).code.length == 0) {
-            revert Error_TokenPairNotDeployed();
-        }
-
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
-        uint8 underlyingDecimals = nyt.decimals();
-
-        // accrue yield
-        _accrueYield(
-            vault,
-            pyt,
-            msg.sender,
-            underlyingDecimals,
-            getPricePerVaultShare(vault)
-        );
-
-        // burn NYTs and PYTs
+        // burn PYT and NYT
+        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
+        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         burnAmount = underlyingAmount;
-        unchecked {
-            // Cannot underflow because a user's balance
-            // will never be larger than the total supply.
-            yieldTokenTotalSupply[vault] -= burnAmount;
-        }
-        nyt.gateBurn(msg.sender, burnAmount);
-        pyt.gateBurn(msg.sender, burnAmount);
+        _exit(
+            vault,
+            underlyingDecimals,
+            underlyingAmount,
+            updatedPricePerVaultShare
+        );
 
         /// -----------------------------------------------------------------------
         /// Effects
@@ -375,7 +329,7 @@ abstract contract Gate is Ownable {
             vault,
             underlyingAmount,
             underlyingDecimals,
-            getPricePerVaultShare(vault),
+            updatedPricePerVaultShare,
             false
         );
 
@@ -409,41 +363,19 @@ abstract contract Gate is Ownable {
             revert Error_VaultSharesNotERC20();
         }
 
-        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        if (address(nyt).code.length == 0) {
-            revert Error_TokenPairNotDeployed();
-        }
-
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
-        uint8 underlyingDecimals = nyt.decimals();
-
-        // accrue yield
+        // burn PYT and NYT
+        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        _accrueYield(
-            vault,
-            pyt,
-            msg.sender,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
-
-        // burn NYTs and PYTs
         burnAmount = _vaultSharesAmountToUnderlyingAmount(
             vaultSharesAmount,
             underlyingDecimals,
             updatedPricePerVaultShare
         );
-        unchecked {
-            // Cannot underflow because a user's balance
-            // will never be larger than the total supply.
-            yieldTokenTotalSupply[vault] -= burnAmount;
-        }
-        nyt.gateBurn(msg.sender, burnAmount);
-        pyt.gateBurn(msg.sender, burnAmount);
+        _exit(vault, underlyingDecimals, burnAmount, updatedPricePerVaultShare);
 
         /// -----------------------------------------------------------------------
         /// Effects
@@ -463,18 +395,20 @@ abstract contract Gate is Ownable {
     function deployTokenPairForVault(address vault)
         public
         virtual
-        returns (NegativeYieldToken nyt, PerpetualYieldToken pyt)
+        returns (YieldToken nyt, YieldToken pyt)
     {
         // Use the CREATE2 opcode to deploy new NegativeYieldToken and PerpetualYieldToken contracts.
         // This will revert if the contracts have already been deployed,
         // as the salt would be the same and we can't deploy with it twice.
-        nyt = new NegativeYieldToken{salt: vault.fillLast12Bytes()}(
+        nyt = new YieldToken{salt: vault.fillLast12Bytes()}(
             address(this),
-            vault
+            vault,
+            false
         );
-        pyt = new PerpetualYieldToken{salt: vault.fillLast12Bytes()}(
+        pyt = new YieldToken{salt: vault.fillLast12Bytes()}(
             address(this),
-            vault
+            vault,
+            true
         );
 
         emit DeployTokenPairForVault(vault, nyt, pyt);
@@ -492,47 +426,20 @@ abstract contract Gate is Ownable {
         returns (uint256 yieldAmount)
     {
         /// -----------------------------------------------------------------------
-        /// Validation
-        /// -----------------------------------------------------------------------
-
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        if (address(pyt).code.length == 0) {
-            revert Error_TokenPairNotDeployed();
-        }
-
-        /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
-        uint8 underlyingDecimals = pyt.decimals();
-
-        // accrue yield
+        // update storage variables and compute yield amount
+        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        uint256 updatedYieldPerToken = _computeYieldPerToken(
+        yieldAmount = _claimYield(
             vault,
-            updatedPricePerVaultShare,
-            underlyingDecimals
+            underlyingDecimals,
+            updatedPricePerVaultShare
         );
-        uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][
-            msg.sender
-        ];
-        if (userYieldPerTokenStored_ != 0) {
-            yieldAmount = _getClaimableYieldAmount(
-                vault,
-                msg.sender,
-                updatedYieldPerToken,
-                userYieldPerTokenStored_,
-                pyt.balanceOf(msg.sender)
-            );
-        }
-        yieldPerTokenStored[vault] = updatedYieldPerToken;
-        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
-        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
 
         // withdraw yield
         if (yieldAmount != 0) {
-            userAccruedYield[vault][msg.sender] = 0;
-
             /// -----------------------------------------------------------------------
             /// Effects
             /// -----------------------------------------------------------------------
@@ -621,44 +528,21 @@ abstract contract Gate is Ownable {
             revert Error_VaultSharesNotERC20();
         }
 
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        if (address(pyt).code.length == 0) {
-            revert Error_TokenPairNotDeployed();
-        }
-
         /// -----------------------------------------------------------------------
         /// State updates
         /// -----------------------------------------------------------------------
 
-        uint8 underlyingDecimals = pyt.decimals();
-
-        // accrue yield
+        // update storage variables and compute yield amount
+        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        uint256 updatedYieldPerToken = _computeYieldPerToken(
+        yieldAmount = _claimYield(
             vault,
-            updatedPricePerVaultShare,
-            underlyingDecimals
+            underlyingDecimals,
+            updatedPricePerVaultShare
         );
-        uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][
-            msg.sender
-        ];
-        if (userYieldPerTokenStored_ != 0) {
-            yieldAmount = _getClaimableYieldAmount(
-                vault,
-                msg.sender,
-                updatedYieldPerToken,
-                userYieldPerTokenStored_,
-                pyt.balanceOf(msg.sender)
-            );
-        }
-        yieldPerTokenStored[vault] = updatedYieldPerToken;
-        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
-        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
 
         // withdraw yield
         if (yieldAmount != 0) {
-            userAccruedYield[vault][msg.sender] = 0;
-
             /// -----------------------------------------------------------------------
             /// Effects
             /// -----------------------------------------------------------------------
@@ -716,30 +600,9 @@ abstract contract Gate is Ownable {
         public
         view
         virtual
-        returns (NegativeYieldToken)
+        returns (YieldToken)
     {
-        return
-            NegativeYieldToken(
-                keccak256(
-                    abi.encodePacked(
-                        // Prefix:
-                        bytes1(0xFF),
-                        // Creator:
-                        address(this),
-                        // Salt:
-                        address(vault).fillLast12Bytes(),
-                        // Bytecode hash:
-                        keccak256(
-                            abi.encodePacked(
-                                // Deployment bytecode:
-                                type(NegativeYieldToken).creationCode,
-                                // Constructor arguments:
-                                abi.encode(address(this), vault)
-                            )
-                        )
-                    )
-                ).fromLast20Bytes() // Convert the CREATE2 hash into an address.
-            );
+        return YieldToken(_computeYieldTokenAddress(vault, false));
     }
 
     /// @notice Returns the PerpetualYieldToken associated with a vault.
@@ -750,30 +613,9 @@ abstract contract Gate is Ownable {
         public
         view
         virtual
-        returns (PerpetualYieldToken)
+        returns (YieldToken)
     {
-        return
-            PerpetualYieldToken(
-                keccak256(
-                    abi.encodePacked(
-                        // Prefix:
-                        bytes1(0xFF),
-                        // Creator:
-                        address(this),
-                        // Salt:
-                        address(vault).fillLast12Bytes(),
-                        // Bytecode hash:
-                        keccak256(
-                            abi.encodePacked(
-                                // Deployment bytecode:
-                                type(PerpetualYieldToken).creationCode,
-                                // Constructor arguments:
-                                abi.encode(address(this), vault)
-                            )
-                        )
-                    )
-                ).fromLast20Bytes() // Convert the CREATE2 hash into an address.
-            );
+        return YieldToken(_computeYieldTokenAddress(vault, true));
     }
 
     /// @notice Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
@@ -786,7 +628,7 @@ abstract contract Gate is Ownable {
         virtual
         returns (uint256)
     {
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
         if (userYieldPerTokenStored_ == 0) {
             // uninitialized account
@@ -815,7 +657,7 @@ abstract contract Gate is Ownable {
         virtual
         returns (uint256)
     {
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
         return
             _computeYieldPerToken(
                 vault,
@@ -917,8 +759,8 @@ abstract contract Gate is Ownable {
             return;
         }
 
-        address vault = PerpetualYieldToken(msg.sender).vault();
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        address vault = YieldToken(msg.sender).vault();
+        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
         if (msg.sender != address(pyt)) {
             revert Error_SenderNotPerpetualYieldToken();
         }
@@ -1007,7 +849,7 @@ abstract contract Gate is Ownable {
     /// @dev Updates the yield earned globally and for a particular user.
     function _accrueYield(
         address vault,
-        PerpetualYieldToken pyt,
+        YieldToken pyt,
         address user,
         uint8 underlyingDecimals,
         uint256 updatedPricePerVaultShare
@@ -1030,6 +872,154 @@ abstract contract Gate is Ownable {
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         userYieldPerTokenStored[vault][user] = updatedYieldPerToken + 1;
+    }
+
+    /// @dev Computes the address of PYTs and NYTs using CREATE2.
+    function _computeYieldTokenAddress(
+        address vault,
+        bool isPerpetualYieldToken
+    ) internal view virtual returns (address) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    // Prefix:
+                    bytes1(0xFF),
+                    // Creator:
+                    address(this),
+                    // Salt:
+                    address(vault).fillLast12Bytes(),
+                    // Bytecode hash:
+                    keccak256(
+                        abi.encodePacked(
+                            // Deployment bytecode:
+                            type(YieldToken).creationCode,
+                            // Constructor arguments:
+                            abi.encode(
+                                address(this),
+                                vault,
+                                isPerpetualYieldToken
+                            )
+                        )
+                    )
+                )
+            ).fromLast20Bytes(); // Convert the CREATE2 hash into an address.
+    }
+
+    /// @dev Mints PYTs and NYTs to the recipient given the amount of underlying deposited.
+    function _enter(
+        address recipient,
+        address vault,
+        uint8 underlyingDecimals,
+        uint256 underlyingAmount,
+        uint256 updatedPricePerVaultShare
+    ) internal virtual {
+        YieldToken nyt = getNegativeYieldTokenForVault(vault);
+        if (address(nyt).code.length == 0) {
+            // token pair hasn't been deployed yet
+            // do the deployment now
+            // only need to check nyt since nyt and pyt are always deployed in pairs
+            deployTokenPairForVault(vault);
+        }
+        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        // accrue yield
+        _accrueYield(
+            vault,
+            pyt,
+            recipient,
+            underlyingDecimals,
+            updatedPricePerVaultShare
+        );
+
+        // mint NYTs and PYTs
+        yieldTokenTotalSupply[vault] += underlyingAmount;
+        nyt.gateMint(recipient, underlyingAmount);
+        pyt.gateMint(recipient, underlyingAmount);
+    }
+
+    /// @dev Burns PYTs and NYTs from msg.sender given the amount of underlying withdrawn.
+    function _exit(
+        address vault,
+        uint8 underlyingDecimals,
+        uint256 underlyingAmount,
+        uint256 updatedPricePerVaultShare
+    ) internal virtual {
+        YieldToken nyt = getNegativeYieldTokenForVault(vault);
+        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        if (address(nyt).code.length == 0) {
+            revert Error_TokenPairNotDeployed();
+        }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        // accrue yield
+        _accrueYield(
+            vault,
+            pyt,
+            msg.sender,
+            underlyingDecimals,
+            updatedPricePerVaultShare
+        );
+
+        // burn NYTs and PYTs
+        unchecked {
+            // Cannot underflow because a user's balance
+            // will never be larger than the total supply.
+            yieldTokenTotalSupply[vault] -= underlyingAmount;
+        }
+        nyt.gateBurn(msg.sender, underlyingAmount);
+        pyt.gateBurn(msg.sender, underlyingAmount);
+    }
+
+    /// @dev Updates storage variables for when a PYT holder claims the accrued yield.
+    function _claimYield(
+        address vault,
+        uint8 underlyingDecimals,
+        uint256 updatedPricePerVaultShare
+    ) internal virtual returns (uint256 yieldAmount) {
+        /// -----------------------------------------------------------------------
+        /// Validation
+        /// -----------------------------------------------------------------------
+
+        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        if (address(pyt).code.length == 0) {
+            revert Error_TokenPairNotDeployed();
+        }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        // accrue yield
+        uint256 updatedYieldPerToken = _computeYieldPerToken(
+            vault,
+            updatedPricePerVaultShare,
+            underlyingDecimals
+        );
+        uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][
+            msg.sender
+        ];
+        if (userYieldPerTokenStored_ != 0) {
+            yieldAmount = _getClaimableYieldAmount(
+                vault,
+                msg.sender,
+                updatedYieldPerToken,
+                userYieldPerTokenStored_,
+                pyt.balanceOf(msg.sender)
+            );
+        }
+        yieldPerTokenStored[vault] = updatedYieldPerToken;
+        pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
+        userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
+        if (yieldAmount != 0) {
+            userAccruedYield[vault][msg.sender] = 0;
+        }
     }
 
     /// @dev Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.

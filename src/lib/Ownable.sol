@@ -20,7 +20,7 @@ abstract contract Ownable {
 
     /// @dev Throws if called by any account other than the owner.
     modifier onlyOwner() {
-        if (owner() != msg.sender) revert Ownable_NotOwner();
+        if (_owner != msg.sender) revert Ownable_NotOwner();
         _;
     }
 
