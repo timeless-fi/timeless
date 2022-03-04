@@ -6,6 +6,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {BaseTest, console} from "../base/BaseTest.sol";
 
 import {Gate} from "../../Gate.sol";
+import {Factory} from "../../Factory.sol";
 import {YieldToken} from "../../YieldToken.sol";
 import {FullMath} from "../../lib/FullMath.sol";
 import {TestERC20} from "../mocks/TestERC20.sol";
@@ -15,6 +16,7 @@ abstract contract BaseGateTest is BaseTest {
     /// Global state
     /// -----------------------------------------------------------------------
 
+    Factory internal factory;
     Gate internal gate;
     address internal constant tester = address(0x69);
     address internal constant tester1 = address(0xabcd);
@@ -28,6 +30,13 @@ abstract contract BaseGateTest is BaseTest {
     /// -----------------------------------------------------------------------
 
     function setUp() public {
+        factory = new Factory(
+            address(this),
+            Factory.ProtocolFeeInfo({
+                fee: uint8(PROTOCOL_FEE),
+                recipient: protocolFeeRecipient
+            })
+        );
         gate = _deployGate();
     }
 
@@ -375,13 +384,16 @@ abstract contract BaseGateTest is BaseTest {
         );
     }
 
-    function test_deployTokenPairForVault(uint8 underlyingDecimals) public {
+    function testFactory_deployYieldTokenPair(uint8 underlyingDecimals) public {
         // bound between 0 and 18
         underlyingDecimals %= 19;
 
         TestERC20 underlying = new TestERC20(underlyingDecimals);
         address vault = _deployVault(underlying);
-        (YieldToken nyt, YieldToken pyt) = gate.deployTokenPairForVault(vault);
+        (YieldToken nyt, YieldToken pyt) = factory.deployYieldTokenPair(
+            gate,
+            vault
+        );
 
         assertEq(
             address(gate.getNegativeYieldTokenForVault(vault)),
@@ -1127,23 +1139,23 @@ abstract contract BaseGateTest is BaseTest {
     function testFail_cannotDeployTokensTwice(uint8 underlyingDecimals) public {
         TestERC20 underlying = new TestERC20(underlyingDecimals);
         address vault = _deployVault(underlying);
-        gate.deployTokenPairForVault(vault);
-        gate.deployTokenPairForVault(vault);
+        factory.deployYieldTokenPair(gate, vault);
+        factory.deployYieldTokenPair(gate, vault);
     }
 
     function testFail_cannotSetProtocolFeeAsRando(
-        Gate.ProtocolFeeInfo memory protocolFeeInfo_
+        Factory.ProtocolFeeInfo memory protocolFeeInfo_
     ) public {
         vm.startPrank(tester);
-        gate.ownerSetProtocolFee(protocolFeeInfo_);
+        factory.ownerSetProtocolFee(protocolFeeInfo_);
     }
 
     /// -----------------------------------------------------------------------
     /// Owner action tests
     /// -----------------------------------------------------------------------
 
-    function test_ownerSetProtocolFee(
-        Gate.ProtocolFeeInfo memory protocolFeeInfo_
+    function testFactory_ownerSetProtocolFee(
+        Factory.ProtocolFeeInfo memory protocolFeeInfo_
     ) public {
         if (
             protocolFeeInfo_.fee != 0 &&
@@ -1157,11 +1169,11 @@ abstract contract BaseGateTest is BaseTest {
                 err[i] = expectedErrSelector[i];
             }
             vm.expectRevert(err);
-            gate.ownerSetProtocolFee(protocolFeeInfo_);
+            factory.ownerSetProtocolFee(protocolFeeInfo_);
         } else {
-            gate.ownerSetProtocolFee(protocolFeeInfo_);
+            factory.ownerSetProtocolFee(protocolFeeInfo_);
 
-            (uint8 fee, address recipient_) = gate.protocolFeeInfo();
+            (uint8 fee, address recipient_) = factory.protocolFeeInfo();
             assertEq(fee, protocolFeeInfo_.fee);
             assertEq(recipient_, protocolFeeInfo_.recipient);
         }
@@ -1181,7 +1193,7 @@ abstract contract BaseGateTest is BaseTest {
         vault = _deployVault(underlying);
         underlying.approve(address(gate), type(uint256).max);
         underlying.approve(vault, type(uint256).max);
-        gate.deployTokenPairForVault(vault);
+        factory.deployYieldTokenPair(gate, vault);
 
         // initialize deposits & yield
         underlying.mint(initialDepositor, initialUnderlyingAmount);

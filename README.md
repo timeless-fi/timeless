@@ -13,16 +13,15 @@ Timeless is a yield tokenization protocol that offers _Perpetual Yield Tokens_ (
 
 ## Architecture
 
--   [`Gate.sol`](src/Gate.sol): Abstract contract that mints/burns NYTs and PYTs of vaults of a specific protocol. Allows PYT holders to claim the yield earned by PYTs. Deploys NYT and PYT contracts. Owns all vault shares.
--   [`NegativeYieldToken.sol`](src/NegativeYieldToken.sol): ERC20 token for representing NYTs.
--   [`PerpetualYieldToken.sol`](src/PerpetualYieldToken.sol): ERC20 token for representing PYTs.
+-   [`Gate.sol`](src/Gate.sol): Abstract contract that mints/burns NYTs and PYTs of vaults of a specific protocol. Allows PYT holders to claim the yield earned by PYTs. Owns all vault shares.
+-   [`Factory.sol`](src/Factory.sol): Deploys NYT and PYT contracts. Tracks protocol fee info.
+-   [`YieldToken.sol`](src/YieldToken.sol): ERC20 token for representing NYTs and PYTs.
 -   [`external/`](src/external/): Interfaces for external contracts Timeless interacts with.
     -   [`YearnVault.sol`](src/external/YearnVault.sol): Interface for Yearn v2 vaults.
 -   [`gates/`](src/gates/): Implementations of `Gate` integrated with different yield protocols.
     -   [`YearnGate.sol`](src/gates/YearnGate.sol): Implementation of `Gate` that uses Yearn v2 vaults.
 -   [`lib/`](src/lib/): Libraries used by other contracts.
-    -   [`BaseERC20.sol`](src/lib/BaseERC20.sol): The base ERC20 contract used by `NegativeYieldToken` and `PerpetualYieldToken`.
-    -   [`ERC20.sol`](src/lib/ERC20.sol): The ERC20 implementation used by `BaseERC20`.
+    -   [`ERC20.sol`](src/lib/ERC20.sol): The ERC20 implementation used by `YieldToken`.
     -   [`FullMath.sol`](src/lib/FullMath.sol): Math library preventing phantom overflows during mulDiv operations.
     -   [`Ownable.sol`](src/lib/Ownable.sol): Basic access control used by `Gate`.
 

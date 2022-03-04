@@ -18,7 +18,7 @@ contract YieldToken is ERC20 {
     /// Immutable parameters
     /// -----------------------------------------------------------------------
 
-    address public immutable gate;
+    Gate public immutable gate;
     address public immutable vault;
     bool public immutable isPerpetualYieldToken;
 
@@ -27,18 +27,18 @@ contract YieldToken is ERC20 {
     /// -----------------------------------------------------------------------
 
     constructor(
-        address gate_,
+        Gate gate_,
         address vault_,
         bool isPerpetualYieldToken_
     )
         ERC20(
             isPerpetualYieldToken_
-                ? Gate(gate_).perpetualYieldTokenName(vault_)
-                : Gate(gate_).negativeYieldTokenName(vault_),
+                ? gate_.perpetualYieldTokenName(vault_)
+                : gate_.negativeYieldTokenName(vault_),
             isPerpetualYieldToken_
-                ? Gate(gate_).perpetualYieldTokenSymbol(vault_)
-                : Gate(gate_).negativeYieldTokenSymbol(vault_),
-            Gate(gate_).getUnderlyingOfVault(vault_).decimals()
+                ? gate_.perpetualYieldTokenSymbol(vault_)
+                : gate_.negativeYieldTokenSymbol(vault_),
+            gate_.getUnderlyingOfVault(vault_).decimals()
         )
     {
         gate = gate_;
@@ -51,7 +51,7 @@ contract YieldToken is ERC20 {
     /// -----------------------------------------------------------------------
 
     function gateMint(address to, uint256 amount) external virtual {
-        if (msg.sender != gate) {
+        if (msg.sender != address(gate)) {
             revert Error_NotGate();
         }
 
@@ -59,7 +59,7 @@ contract YieldToken is ERC20 {
     }
 
     function gateBurn(address from, uint256 amount) external virtual {
-        if (msg.sender != gate) {
+        if (msg.sender != address(gate)) {
             revert Error_NotGate();
         }
 
