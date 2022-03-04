@@ -5,6 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Gate} from "../Gate.sol";
+import {Factory} from "../Factory.sol";
 import {FullMath} from "../lib/FullMath.sol";
 import {YearnVault} from "../external/YearnVault.sol";
 
@@ -22,9 +23,7 @@ contract YearnGate is Gate {
     /// Initialization
     /// -----------------------------------------------------------------------
 
-    constructor(address initialOwner, ProtocolFeeInfo memory protocolFeeInfo_)
-        Gate(initialOwner, protocolFeeInfo_)
-    {}
+    constructor(Factory factory_) Gate(factory_) {}
 
     /// -----------------------------------------------------------------------
     /// Getters

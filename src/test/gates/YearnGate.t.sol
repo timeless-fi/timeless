@@ -11,14 +11,7 @@ import {TestYearnVault} from "../mocks/TestYearnVault.sol";
 
 contract YearnGateTest is BaseGateTest {
     function _deployGate() internal virtual override returns (Gate gate_) {
-        return
-            new YearnGate(
-                address(this),
-                Gate.ProtocolFeeInfo({
-                    fee: uint8(PROTOCOL_FEE),
-                    recipient: protocolFeeRecipient
-                })
-            );
+        return new YearnGate(factory);
     }
 
     function _deployVault(ERC20 underlying)

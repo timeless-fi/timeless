@@ -5,7 +5,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
-import {Ownable} from "./lib/Ownable.sol";
+import {Factory} from "./Factory.sol";
 import {FullMath} from "./lib/FullMath.sol";
 import {YieldToken} from "./YieldToken.sol";
 
@@ -26,7 +26,7 @@ import {YieldToken} from "./YieldToken.sol";
 ///    each vault share can be redeemed for.
 /// 5) If vault shares are represented using an ERC20 token, then the ERC20 token contract must be
 ///    the vault contract itself.
-abstract contract Gate is Ownable {
+abstract contract Gate {
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
@@ -39,7 +39,6 @@ abstract contract Gate is Ownable {
     /// Errors
     /// -----------------------------------------------------------------------
 
-    error Error_ProtocolFeeRecipientIsZero();
     error Error_VaultSharesNotERC20();
     error Error_TokenPairNotDeployed();
     error Error_SenderNotPerpetualYieldToken();
@@ -84,12 +83,6 @@ abstract contract Gate is Ownable {
         address indexed vault,
         uint256 vaultSharesAmount
     );
-    event DeployTokenPairForVault(
-        address indexed vault,
-        YieldToken nyt,
-        YieldToken pyt
-    );
-    event SetProtocolFee(ProtocolFeeInfo protocolFeeInfo_);
 
     /// -----------------------------------------------------------------------
     /// Constants
@@ -99,15 +92,14 @@ abstract contract Gate is Ownable {
     uint256 internal constant PRECISION = 10**27;
 
     /// -----------------------------------------------------------------------
-    /// Storage variables
+    /// Immutable parameters
     /// -----------------------------------------------------------------------
 
-    struct ProtocolFeeInfo {
-        uint8 fee; // each increment represents 0.1%, so max is 25.5%
-        address recipient;
-    }
-    /// @notice The protocol fee and the fee recipient address.
-    ProtocolFeeInfo public protocolFeeInfo;
+    Factory public immutable factory;
+
+    /// -----------------------------------------------------------------------
+    /// Storage variables
+    /// -----------------------------------------------------------------------
 
     /// @notice The amount of underlying tokens each vault share is worth, at the time of the last update.
     /// @dev vault => value
@@ -139,17 +131,8 @@ abstract contract Gate is Ownable {
     /// Initialization
     /// -----------------------------------------------------------------------
 
-    constructor(address initialOwner, ProtocolFeeInfo memory protocolFeeInfo_) {
-        _transferOwnership(initialOwner);
-
-        if (
-            protocolFeeInfo_.fee != 0 &&
-            protocolFeeInfo_.recipient == address(0)
-        ) {
-            revert Error_ProtocolFeeRecipientIsZero();
-        }
-        protocolFeeInfo = protocolFeeInfo_;
-        emit SetProtocolFee(protocolFeeInfo_);
+    constructor(Factory factory_) {
+        factory = factory_;
     }
 
     /// -----------------------------------------------------------------------
@@ -387,33 +370,6 @@ abstract contract Gate is Ownable {
         emit ExitToVaultShares(msg.sender, recipient, vault, vaultSharesAmount);
     }
 
-    /// @notice Deploys the NegativeYieldToken and PerpetualYieldToken associated with a vault.
-    /// @dev Will revert if they have already been deployed.
-    /// @param vault The vault to deploy NYT and PYT for
-    /// @return nyt The deployed NegativeYieldToken
-    /// @return pyt The deployed PerpetualYieldToken
-    function deployTokenPairForVault(address vault)
-        public
-        virtual
-        returns (YieldToken nyt, YieldToken pyt)
-    {
-        // Use the CREATE2 opcode to deploy new NegativeYieldToken and PerpetualYieldToken contracts.
-        // This will revert if the contracts have already been deployed,
-        // as the salt would be the same and we can't deploy with it twice.
-        nyt = new YieldToken{salt: vault.fillLast12Bytes()}(
-            address(this),
-            vault,
-            false
-        );
-        pyt = new YieldToken{salt: vault.fillLast12Bytes()}(
-            address(this),
-            vault,
-            true
-        );
-
-        emit DeployTokenPairForVault(vault, nyt, pyt);
-    }
-
     /// @notice Claims the yield earned by the PerpetualYieldToken balance of msg.sender, in the underlying token.
     /// @dev If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// revert.
@@ -444,8 +400,8 @@ abstract contract Gate is Ownable {
             /// Effects
             /// -----------------------------------------------------------------------
 
-            ProtocolFeeInfo memory protocolFeeInfo_ = protocolFeeInfo;
-            uint256 fee = protocolFeeInfo_.fee;
+            (uint8 fee, address protocolFeeRecipient) = factory
+                .protocolFeeInfo();
 
             if (fee != 0) {
                 uint256 protocolFee = (yieldAmount * fee) / 1000;
@@ -464,7 +420,7 @@ abstract contract Gate is Ownable {
                     );
                     if (protocolFee != 0) {
                         ERC20(vault).safeTransfer(
-                            protocolFeeInfo_.recipient,
+                            protocolFeeRecipient,
                             protocolFee
                         );
                     }
@@ -475,7 +431,7 @@ abstract contract Gate is Ownable {
                     // still be nonnegligible vault shares after this
                     if (protocolFee != 0) {
                         _withdrawFromVault(
-                            protocolFeeInfo_.recipient,
+                            protocolFeeRecipient,
                             vault,
                             protocolFee,
                             underlyingDecimals,
@@ -554,8 +510,8 @@ abstract contract Gate is Ownable {
                 updatedPricePerVaultShare
             );
 
-            ProtocolFeeInfo memory protocolFeeInfo_ = protocolFeeInfo;
-            uint256 fee = protocolFeeInfo_.fee;
+            (uint8 fee, address protocolFeeRecipient) = factory
+                .protocolFeeInfo();
 
             if (fee != 0) {
                 uint256 protocolFee = (yieldAmount * fee) / 1000;
@@ -564,10 +520,7 @@ abstract contract Gate is Ownable {
                     yieldAmount -= protocolFee;
                 }
 
-                ERC20(vault).safeTransfer(
-                    protocolFeeInfo_.recipient,
-                    protocolFee
-                );
+                ERC20(vault).safeTransfer(protocolFeeRecipient, protocolFee);
             }
 
             // transfer vault shares to recipient
@@ -821,28 +774,6 @@ abstract contract Gate is Ownable {
     }
 
     /// -----------------------------------------------------------------------
-    /// Owner functions
-    /// -----------------------------------------------------------------------
-
-    /// @notice Updates the protocol fee and/or the protocol fee recipient.
-    /// Only callable by the owner.
-    /// @param protocolFeeInfo_ The new protocol fee info
-    function ownerSetProtocolFee(ProtocolFeeInfo calldata protocolFeeInfo_)
-        external
-        onlyOwner
-    {
-        if (
-            protocolFeeInfo_.fee != 0 &&
-            protocolFeeInfo_.recipient == address(0)
-        ) {
-            revert Error_ProtocolFeeRecipientIsZero();
-        }
-        protocolFeeInfo = protocolFeeInfo_;
-
-        emit SetProtocolFee(protocolFeeInfo_);
-    }
-
-    /// -----------------------------------------------------------------------
     /// Internal utilities
     /// -----------------------------------------------------------------------
 
@@ -885,9 +816,9 @@ abstract contract Gate is Ownable {
                     // Prefix:
                     bytes1(0xFF),
                     // Creator:
-                    address(this),
+                    address(factory),
                     // Salt:
-                    address(vault).fillLast12Bytes(),
+                    bytes32(0),
                     // Bytecode hash:
                     keccak256(
                         abi.encodePacked(
@@ -918,7 +849,7 @@ abstract contract Gate is Ownable {
             // token pair hasn't been deployed yet
             // do the deployment now
             // only need to check nyt since nyt and pyt are always deployed in pairs
-            deployTokenPairForVault(vault);
+            factory.deployYieldTokenPair(this, vault);
         }
         YieldToken pyt = getPerpetualYieldTokenForVault(vault);
 
