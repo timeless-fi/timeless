@@ -11,6 +11,7 @@ import {Factory} from "../../Factory.sol";
 import {YieldToken} from "../../YieldToken.sol";
 import {FullMath} from "../../lib/FullMath.sol";
 import {TestERC20} from "../mocks/TestERC20.sol";
+import {TestERC4626} from "../mocks/TestERC4626.sol";
 
 abstract contract BaseGateTest is BaseTest {
     /// -----------------------------------------------------------------------
@@ -50,7 +51,8 @@ abstract contract BaseGateTest is BaseTest {
         uint8 underlyingDecimals,
         uint192 initialUnderlyingAmount,
         uint192 initialYieldAmount,
-        uint192 underlyingAmount
+        uint192 underlyingAmount,
+        bool useXPYT
     ) public {
         vm.startPrank(tester);
 
@@ -62,6 +64,11 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
+        ERC4626 xPYT = useXPYT
+            ? new TestERC4626(
+                ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
+            )
+            : XPYT_NULL;
 
         // mint underlying
         underlying.mint(tester, underlyingAmount);
@@ -71,7 +78,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 mintAmount = gate.enterWithUnderlying(
             recipient,
             vault,
-            XPYT_NULL,
+            xPYT,
             underlyingAmount
         );
 
@@ -92,7 +99,7 @@ abstract contract BaseGateTest is BaseTest {
             underlyingDecimals
         );
         assertEqDecimal(
-            pyt.balanceOf(recipient),
+            useXPYT ? xPYT.balanceOf(recipient) : pyt.balanceOf(recipient),
             underlyingAmount,
             underlyingDecimals
         );
@@ -103,7 +110,8 @@ abstract contract BaseGateTest is BaseTest {
         uint8 underlyingDecimals,
         uint192 initialUnderlyingAmount,
         uint192 initialYieldAmount,
-        uint192 underlyingAmount
+        uint192 underlyingAmount,
+        bool useXPYT
     ) public {
         if (!gate.vaultSharesIsERC20()) return;
 
@@ -122,6 +130,11 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
+        ERC4626 xPYT = useXPYT
+            ? new TestERC4626(
+                ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
+            )
+            : XPYT_NULL;
 
         // mint underlying and enter vault
         underlying.mint(tester, underlyingAmount);
@@ -140,7 +153,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 mintAmount = gate.enterWithVaultShares(
             recipient,
             vault,
-            XPYT_NULL,
+            xPYT,
             vaultSharesAmount
         );
 
@@ -163,7 +176,7 @@ abstract contract BaseGateTest is BaseTest {
             epsilonInv
         );
         assertEqDecimalEpsilonBelow(
-            pyt.balanceOf(recipient),
+            useXPYT ? xPYT.balanceOf(recipient) : pyt.balanceOf(recipient),
             underlyingAmount,
             underlyingDecimals,
             epsilonInv
@@ -181,7 +194,8 @@ abstract contract BaseGateTest is BaseTest {
         uint192 initialUnderlyingAmount,
         uint192 initialYieldAmount,
         uint192 additionalYieldAmount,
-        uint192 underlyingAmount
+        uint128 underlyingAmount,
+        bool useXPYT
     ) public {
         vm.startPrank(tester);
 
@@ -212,12 +226,17 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
+        ERC4626 xPYT = useXPYT
+            ? new TestERC4626(
+                ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
+            )
+            : XPYT_NULL;
 
         // mint underlying
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, xPYT, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -240,10 +259,13 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(vault, additionalYieldAmount);
 
         // exit
+        if (useXPYT) {
+            xPYT.approve(address(gate), type(uint256).max);
+        }
         uint256 burnAmount = gate.exitToUnderlying(
             recipient,
             vault,
-            XPYT_NULL,
+            xPYT,
             underlyingAmount
         );
 
@@ -266,7 +288,7 @@ abstract contract BaseGateTest is BaseTest {
             epsilonInv
         );
         assertEqDecimalEpsilonBelow(
-            pyt.balanceOf(recipient),
+            useXPYT ? xPYT.balanceOf(recipient) : pyt.balanceOf(recipient),
             0,
             underlyingDecimals,
             epsilonInv
@@ -284,7 +306,8 @@ abstract contract BaseGateTest is BaseTest {
         uint192 initialUnderlyingAmount,
         uint192 initialYieldAmount,
         uint192 additionalYieldAmount,
-        uint192 underlyingAmount
+        uint128 underlyingAmount,
+        bool useXPYT
     ) public {
         if (!gate.vaultSharesIsERC20()) return;
 
@@ -318,12 +341,17 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
+        ERC4626 xPYT = useXPYT
+            ? new TestERC4626(
+                ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
+            )
+            : XPYT_NULL;
 
         // mint underlying
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, xPYT, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -346,6 +374,9 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(vault, additionalYieldAmount);
 
         // exit
+        if (useXPYT) {
+            xPYT.approve(address(gate), type(uint256).max);
+        }
         uint256 vaultSharesAmount = FullMath.mulDiv(
             underlyingAmount,
             10**underlyingDecimals,
@@ -354,7 +385,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 burnAmount = gate.exitToVaultShares(
             recipient,
             vault,
-            XPYT_NULL,
+            xPYT,
             vaultSharesAmount
         );
 
@@ -369,7 +400,6 @@ abstract contract BaseGateTest is BaseTest {
         );
         // recipient burnt NYT and PYT
         YieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
-        YieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimalEpsilonBelow(
             nyt.balanceOf(recipient),
             0,
@@ -377,7 +407,11 @@ abstract contract BaseGateTest is BaseTest {
             epsilonInv
         );
         assertEqDecimalEpsilonBelow(
-            pyt.balanceOf(recipient),
+            useXPYT
+                ? xPYT.balanceOf(recipient)
+                : gate.getPerpetualYieldTokenForVault(vault).balanceOf(
+                    recipient
+                ),
             0,
             underlyingDecimals,
             epsilonInv
@@ -637,6 +671,146 @@ abstract contract BaseGateTest is BaseTest {
             underlyingDecimals,
             epsilonInv
         );
+    }
+
+    function test_claimYieldAndEnter(
+        uint8 underlyingDecimals,
+        uint192 initialUnderlyingAmount,
+        uint192 initialYieldAmount,
+        uint192 additionalYieldAmount,
+        uint192 underlyingAmount,
+        bool useXPYT
+    ) public {
+        vm.startPrank(tester);
+
+        // bound between 6 and 18
+        underlyingDecimals %= 13;
+        underlyingDecimals += 6;
+
+        // bound the initial yield below 100x the initial underlying
+        if (initialUnderlyingAmount != 0) {
+            initialYieldAmount = uint192(
+                initialYieldAmount % (uint256(initialUnderlyingAmount) * 100)
+            );
+        } else {
+            initialYieldAmount = 0;
+        }
+
+        // ensure underlying amount is large enough
+        if (underlyingAmount < 10**underlyingDecimals) {
+            underlyingAmount = uint192(10**underlyingDecimals);
+        }
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+        ERC4626 xPYT = useXPYT
+            ? new TestERC4626(
+                ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
+            )
+            : XPYT_NULL;
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        // receive raw PYT
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+
+        // mint additional yield to the vault
+        // the minimum amount of yield the vault can distribute is limited by the precision
+        // of its pricePerShare. namely, the yield should be at least the current amount of underlying
+        // times (1 / pricePerShare).
+        {
+            uint256 totalUnderlyingAmount = uint256(underlyingAmount) +
+                uint256(initialUnderlyingAmount) +
+                uint256(initialYieldAmount);
+            additionalYieldAmount = uint192(
+                additionalYieldAmount % (totalUnderlyingAmount * 10)
+            );
+            uint192 minYieldAmount = uint192(
+                totalUnderlyingAmount / gate.getPricePerVaultShare(vault)
+            );
+            if (additionalYieldAmount < minYieldAmount) {
+                additionalYieldAmount = minYieldAmount;
+            }
+        }
+        uint256 expectedYield;
+        uint256 expectedFee;
+        {
+            uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(
+                vault
+            );
+            underlying.mint(vault, additionalYieldAmount);
+            uint256 afterPricePerVaultShare = gate.getPricePerVaultShare(vault);
+            expectedYield =
+                (FullMath.mulDiv(
+                    underlyingAmount,
+                    afterPricePerVaultShare - beforePricePerVaultShare,
+                    beforePricePerVaultShare
+                ) * (1000 - PROTOCOL_FEE)) /
+                1000;
+            expectedFee =
+                (expectedYield * PROTOCOL_FEE) /
+                (1000 - PROTOCOL_FEE);
+            if (gate.vaultSharesIsERC20()) {
+                // fee paid in vault shares
+                expectedFee = _underlyingAmountToVaultSharesAmount(
+                    vault,
+                    expectedFee,
+                    underlyingDecimals
+                );
+            }
+        }
+
+        // claim yield
+        uint256 claimedYield = gate.claimYieldAndEnter(recipient, vault, xPYT);
+
+        // check received yield
+        uint256 epsilonInv = min(10**(underlyingDecimals - 3), 10**6);
+        assertEqDecimalEpsilonAround(
+            claimedYield,
+            expectedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+        assertEqDecimalEpsilonAround(
+            gate.getNegativeYieldTokenForVault(vault).balanceOf(recipient),
+            claimedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+        assertEqDecimalEpsilonAround(
+            useXPYT
+                ? xPYT.balanceOf(recipient)
+                : gate.getPerpetualYieldTokenForVault(vault).balanceOf(
+                    recipient
+                ),
+            claimedYield,
+            underlyingDecimals,
+            epsilonInv
+        );
+
+        // check protocol fee
+        if (gate.vaultSharesIsERC20()) {
+            // check vault balance
+            assertEqDecimalEpsilonAround(
+                ERC20(vault).balanceOf(protocolFeeRecipient),
+                expectedFee,
+                underlyingDecimals,
+                epsilonInv
+            );
+        } else {
+            // check underlying balance
+            assertEqDecimalEpsilonAround(
+                underlying.balanceOf(protocolFeeRecipient),
+                expectedFee,
+                underlyingDecimals,
+                epsilonInv
+            );
+        }
     }
 
     function test_transferPYT_toUninitializedAccount(

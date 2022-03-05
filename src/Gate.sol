@@ -843,7 +843,7 @@ abstract contract Gate is ReentrancyGuard {
         uint256 amount,
         uint256 fromBalance,
         uint256 toBalance
-    ) external virtual nonReentrant {
+    ) external virtual {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
