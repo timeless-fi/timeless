@@ -2,6 +2,7 @@
 pragma solidity ^0.8.4;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {BaseTest, console} from "../base/BaseTest.sol";
 
@@ -24,6 +25,7 @@ abstract contract BaseGateTest is BaseTest {
     address internal constant initialDepositor = address(0x420);
     address internal constant protocolFeeRecipient = address(0x6969);
     uint256 internal constant PROTOCOL_FEE = 100; // 10%
+    ERC4626 internal constant XPYT_NULL = ERC4626(address(0));
 
     /// -----------------------------------------------------------------------
     /// Setup
@@ -69,6 +71,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 mintAmount = gate.enterWithUnderlying(
             recipient,
             vault,
+            XPYT_NULL,
             underlyingAmount
         );
 
@@ -137,6 +140,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 mintAmount = gate.enterWithVaultShares(
             recipient,
             vault,
+            XPYT_NULL,
             vaultSharesAmount
         );
 
@@ -213,7 +217,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -239,6 +243,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 burnAmount = gate.exitToUnderlying(
             recipient,
             vault,
+            XPYT_NULL,
             underlyingAmount
         );
 
@@ -318,7 +323,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -349,6 +354,7 @@ abstract contract BaseGateTest is BaseTest {
         uint256 burnAmount = gate.exitToVaultShares(
             recipient,
             vault,
+            XPYT_NULL,
             vaultSharesAmount
         );
 
@@ -450,7 +456,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -566,7 +572,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -675,7 +681,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -785,7 +791,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // enter
         underlying.mint(tester, underlyingAmount);
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // switch to tester1
         vm.stopPrank();
@@ -794,7 +800,7 @@ abstract contract BaseGateTest is BaseTest {
         // enter
         underlying.mint(tester1, underlyingAmount);
         underlying.approve(address(gate), type(uint256).max);
-        gate.enterWithUnderlying(tester1, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester1, vault, XPYT_NULL, underlyingAmount);
 
         // switch to tester
         vm.stopPrank();
@@ -910,7 +916,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -1026,7 +1032,7 @@ abstract contract BaseGateTest is BaseTest {
 
         // enter
         underlying.mint(tester, underlyingAmount);
-        gate.enterWithUnderlying(tester, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
 
         // switch to tester1
         vm.stopPrank();
@@ -1035,7 +1041,7 @@ abstract contract BaseGateTest is BaseTest {
         // enter
         underlying.mint(tester1, underlyingAmount);
         underlying.approve(address(gate), type(uint256).max);
-        gate.enterWithUnderlying(tester1, vault, underlyingAmount);
+        gate.enterWithUnderlying(tester1, vault, XPYT_NULL, underlyingAmount);
 
         // switch to tester
         vm.stopPrank();
