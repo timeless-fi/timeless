@@ -1171,19 +1171,56 @@ abstract contract Gate is ReentrancyGuard {
         uint256 vaultSharesAmount,
         uint8 underlyingDecimals,
         uint256 pricePerVaultShare
-    ) internal pure virtual returns (uint256);
+    ) internal pure virtual returns (uint256) {
+        return
+            FullMath.mulDiv(
+                vaultSharesAmount,
+                pricePerVaultShare,
+                10**underlyingDecimals
+            );
+    }
 
     /// @dev Converts an underlying asset amount into an equivalent vault shares amount
     function _underlyingAmountToVaultSharesAmount(
         uint256 underlyingAmount,
         uint8 underlyingDecimals,
         uint256 pricePerVaultShare
-    ) internal pure virtual returns (uint256);
+    ) internal pure virtual returns (uint256) {
+        return
+            FullMath.mulDiv(
+                underlyingAmount,
+                10**underlyingDecimals,
+                pricePerVaultShare
+            );
+    }
 
     /// @dev Computes the latest yieldPerToken value for a vault.
     function _computeYieldPerToken(
         address vault,
         uint256 updatedPricePerVaultShare,
         uint8 underlyingDecimals
-    ) internal view virtual returns (uint256);
+    ) internal view virtual returns (uint256) {
+        uint256 pytTotalSupply = yieldTokenTotalSupply[vault];
+        if (pytTotalSupply == 0) {
+            return yieldPerTokenStored[vault];
+        }
+        uint256 pricePerVaultShareStored_ = pricePerVaultShareStored[vault];
+        if (updatedPricePerVaultShare <= pricePerVaultShareStored_) {
+            // rounding error in vault share or no yield accrued
+            return yieldPerTokenStored[vault];
+        }
+        uint256 underlyingPrecision = 10**underlyingDecimals;
+        uint256 newYieldAccrued;
+        unchecked {
+            // can't underflow since we know updatedPricePerVaultShare > pricePerVaultShareStored_
+            newYieldAccrued = FullMath.mulDiv(
+                updatedPricePerVaultShare - pricePerVaultShareStored_,
+                getVaultShareBalance(vault),
+                underlyingPrecision
+            );
+        }
+        return
+            yieldPerTokenStored[vault] +
+            FullMath.mulDiv(newYieldAccrued, PRECISION, pytTotalSupply);
+    }
 }
