@@ -1179,7 +1179,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         uint256 pricePerVaultShare
     ) internal pure virtual returns (uint256) {
         return
-            FullMath.mulDiv(
+            FullMath.mulDivRoundingUp(
                 underlyingAmount,
                 10**underlyingDecimals,
                 pricePerVaultShare
