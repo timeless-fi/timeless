@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
+import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
@@ -27,7 +28,7 @@ import {YieldToken} from "./YieldToken.sol";
 ///    each vault share can be redeemed for.
 /// 5) If vault shares are represented using an ERC20 token, then the ERC20 token contract must be
 ///    the vault contract itself.
-abstract contract Gate {
+abstract contract Gate is ReentrancyGuard {
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
@@ -167,7 +168,7 @@ abstract contract Gate {
         address vault,
         ERC4626 xPYT,
         uint256 underlyingAmount
-    ) external virtual returns (uint256 mintAmount) {
+    ) external virtual nonReentrant returns (uint256 mintAmount) {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -177,7 +178,7 @@ abstract contract Gate {
         }
 
         /// -----------------------------------------------------------------------
-        /// State updates
+        /// State updates & effects
         /// -----------------------------------------------------------------------
 
         // mint PYT and NYT
@@ -190,10 +191,6 @@ abstract contract Gate {
             underlyingAmount,
             getPricePerVaultShare(vault)
         );
-
-        /// -----------------------------------------------------------------------
-        /// Effects
-        /// -----------------------------------------------------------------------
 
         // transfer underlying from msg.sender to address(this)
         ERC20 underlying = getUnderlyingOfVault(vault);
@@ -229,7 +226,7 @@ abstract contract Gate {
         address vault,
         ERC4626 xPYT,
         uint256 vaultSharesAmount
-    ) external virtual returns (uint256 mintAmount) {
+    ) external virtual nonReentrant returns (uint256 mintAmount) {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -244,7 +241,7 @@ abstract contract Gate {
         }
 
         /// -----------------------------------------------------------------------
-        /// State updates
+        /// State updates & effects
         /// -----------------------------------------------------------------------
 
         // mint PYT and NYT
@@ -263,10 +260,6 @@ abstract contract Gate {
             mintAmount,
             updatedPricePerVaultShare
         );
-
-        /// -----------------------------------------------------------------------
-        /// Effects
-        /// -----------------------------------------------------------------------
 
         // transfer vault tokens from msg.sender to address(this)
         ERC20(vault).safeTransferFrom(
@@ -299,7 +292,7 @@ abstract contract Gate {
         address vault,
         ERC4626 xPYT,
         uint256 underlyingAmount
-    ) external virtual returns (uint256 burnAmount) {
+    ) external virtual nonReentrant returns (uint256 burnAmount) {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -309,7 +302,7 @@ abstract contract Gate {
         }
 
         /// -----------------------------------------------------------------------
-        /// State updates
+        /// State updates & effects
         /// -----------------------------------------------------------------------
 
         // burn PYT and NYT
@@ -323,10 +316,6 @@ abstract contract Gate {
             underlyingAmount,
             updatedPricePerVaultShare
         );
-
-        /// -----------------------------------------------------------------------
-        /// Effects
-        /// -----------------------------------------------------------------------
 
         // withdraw underlying from vault to recipient
         // don't check balance since user can just withdraw slightly less
@@ -364,7 +353,7 @@ abstract contract Gate {
         address vault,
         ERC4626 xPYT,
         uint256 vaultSharesAmount
-    ) external virtual returns (uint256 burnAmount) {
+    ) external virtual nonReentrant returns (uint256 burnAmount) {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -379,7 +368,7 @@ abstract contract Gate {
         }
 
         /// -----------------------------------------------------------------------
-        /// State updates
+        /// State updates & effects
         /// -----------------------------------------------------------------------
 
         // burn PYT and NYT
@@ -397,10 +386,6 @@ abstract contract Gate {
             burnAmount,
             updatedPricePerVaultShare
         );
-
-        /// -----------------------------------------------------------------------
-        /// Effects
-        /// -----------------------------------------------------------------------
 
         // transfer vault tokens to recipient
         ERC20(vault).safeTransfer(recipient, vaultSharesAmount);
@@ -423,6 +408,7 @@ abstract contract Gate {
     function claimYieldInUnderlying(address recipient, address vault)
         external
         virtual
+        nonReentrant
         returns (uint256 yieldAmount)
     {
         /// -----------------------------------------------------------------------
@@ -517,6 +503,7 @@ abstract contract Gate {
     function claimYieldInVaultShares(address recipient, address vault)
         external
         virtual
+        nonReentrant
         returns (uint256 yieldAmount)
     {
         /// -----------------------------------------------------------------------
@@ -598,11 +585,7 @@ abstract contract Gate {
         address recipient,
         address vault,
         ERC4626 xPYT
-    ) external virtual returns (uint256 yieldAmount) {
-        /// -----------------------------------------------------------------------
-        /// State updates
-        /// -----------------------------------------------------------------------
-
+    ) external virtual nonReentrant returns (uint256 yieldAmount) {
         // update storage variables and compute yield amount
         uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
@@ -614,10 +597,6 @@ abstract contract Gate {
 
         // use yield to mint NYT and PYT
         if (yieldAmount != 0) {
-            /// -----------------------------------------------------------------------
-            /// Effects
-            /// -----------------------------------------------------------------------
-
             (uint8 fee, address protocolFeeRecipient) = factory
                 .protocolFeeInfo();
 
@@ -864,7 +843,7 @@ abstract contract Gate {
         uint256 amount,
         uint256 fromBalance,
         uint256 toBalance
-    ) external virtual {
+    ) external virtual nonReentrant {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -1037,12 +1016,18 @@ abstract contract Gate {
         } else {
             // mint PYT and wrap in xPYT
             pyt.gateMint(address(this), underlyingAmount);
+
             if (
                 pyt.allowance(address(this), address(xPYT)) < underlyingAmount
             ) {
                 // set PYT approval
                 pyt.approve(address(xPYT), type(uint256).max);
             }
+
+            /// -----------------------------------------------------------------------
+            /// Effects
+            /// -----------------------------------------------------------------------
+
             xPYT.deposit(underlyingAmount, recipient);
         }
     }
@@ -1085,6 +1070,10 @@ abstract contract Gate {
             // burn raw PYT from sender
             pyt.gateBurn(msg.sender, underlyingAmount);
         } else {
+            /// -----------------------------------------------------------------------
+            /// Effects
+            /// -----------------------------------------------------------------------
+
             // convert xPYT to PYT then burn
             xPYT.withdraw(underlyingAmount, address(this), msg.sender);
             pyt.gateBurn(address(this), underlyingAmount);
