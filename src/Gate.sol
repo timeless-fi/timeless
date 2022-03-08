@@ -8,6 +8,8 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Factory} from "./Factory.sol";
 import {FullMath} from "./lib/FullMath.sol";
+import {Multicall} from "./lib/Multicall.sol";
+import {SelfPermit} from "./lib/SelfPermit.sol";
 import {NegativeYieldToken} from "./NegativeYieldToken.sol";
 import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 
@@ -28,7 +30,7 @@ import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 ///    each vault share can be redeemed for.
 /// 5) If vault shares are represented using an ERC20 token, then the ERC20 token contract must be
 ///    the vault contract itself.
-abstract contract Gate is ReentrancyGuard {
+abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
