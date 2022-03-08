@@ -5,11 +5,11 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
 import {Factory} from "./Factory.sol";
 import {FullMath} from "./lib/FullMath.sol";
-import {YieldToken} from "./YieldToken.sol";
+import {NegativeYieldToken} from "./NegativeYieldToken.sol";
+import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 
 /// @title Gate
 /// @author zefram.eth
@@ -35,8 +35,6 @@ abstract contract Gate is ReentrancyGuard {
 
     using SafeTransferLib for ERC20;
     using SafeTransferLib for ERC4626;
-    using Bytes32AddressLib for address;
-    using Bytes32AddressLib for bytes32;
 
     /// -----------------------------------------------------------------------
     /// Errors
@@ -639,8 +637,8 @@ abstract contract Gate is ReentrancyGuard {
                 }
             }
 
-            YieldToken nyt = getNegativeYieldTokenForVault(vault);
-            YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+            NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
+            PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
 
             // accrue yield to recipient
             // no need to do it if the recipient is msg.sender, since
@@ -693,9 +691,9 @@ abstract contract Gate is ReentrancyGuard {
         public
         view
         virtual
-        returns (YieldToken)
+        returns (NegativeYieldToken)
     {
-        return YieldToken(_computeYieldTokenAddress(vault, false));
+        return factory.getNegativeYieldToken(this, vault);
     }
 
     /// @notice Returns the PerpetualYieldToken associated with a vault.
@@ -706,9 +704,9 @@ abstract contract Gate is ReentrancyGuard {
         public
         view
         virtual
-        returns (YieldToken)
+        returns (PerpetualYieldToken)
     {
-        return YieldToken(_computeYieldTokenAddress(vault, true));
+        return factory.getPerpetualYieldToken(this, vault);
     }
 
     /// @notice Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
@@ -721,7 +719,7 @@ abstract contract Gate is ReentrancyGuard {
         virtual
         returns (uint256)
     {
-        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
         if (userYieldPerTokenStored_ == 0) {
             // uninitialized account
@@ -750,7 +748,7 @@ abstract contract Gate is ReentrancyGuard {
         virtual
         returns (uint256)
     {
-        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         return
             _computeYieldPerToken(
                 vault,
@@ -852,8 +850,8 @@ abstract contract Gate is ReentrancyGuard {
             return;
         }
 
-        address vault = YieldToken(msg.sender).vault();
-        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        address vault = PerpetualYieldToken(msg.sender).vault();
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         if (msg.sender != address(pyt)) {
             revert Error_SenderNotPerpetualYieldToken();
         }
@@ -906,7 +904,7 @@ abstract contract Gate is ReentrancyGuard {
     /// @dev Updates the yield earned globally and for a particular user.
     function _accrueYield(
         address vault,
-        YieldToken pyt,
+        PerpetualYieldToken pyt,
         address user,
         uint8 underlyingDecimals,
         uint256 updatedPricePerVaultShare
@@ -931,37 +929,6 @@ abstract contract Gate is ReentrancyGuard {
         userYieldPerTokenStored[vault][user] = updatedYieldPerToken + 1;
     }
 
-    /// @dev Computes the address of PYTs and NYTs using CREATE2.
-    function _computeYieldTokenAddress(
-        address vault,
-        bool isPerpetualYieldToken
-    ) internal view virtual returns (address) {
-        return
-            keccak256(
-                abi.encodePacked(
-                    // Prefix:
-                    bytes1(0xFF),
-                    // Creator:
-                    address(factory),
-                    // Salt:
-                    bytes32(0),
-                    // Bytecode hash:
-                    keccak256(
-                        abi.encodePacked(
-                            // Deployment bytecode:
-                            type(YieldToken).creationCode,
-                            // Constructor arguments:
-                            abi.encode(
-                                address(this),
-                                vault,
-                                isPerpetualYieldToken
-                            )
-                        )
-                    )
-                )
-            ).fromLast20Bytes(); // Convert the CREATE2 hash into an address.
-    }
-
     /// @dev Mints PYTs and NYTs to the recipient given the amount of underlying deposited.
     function _enter(
         address recipient,
@@ -971,14 +938,14 @@ abstract contract Gate is ReentrancyGuard {
         uint256 underlyingAmount,
         uint256 updatedPricePerVaultShare
     ) internal virtual {
-        YieldToken nyt = getNegativeYieldTokenForVault(vault);
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
         if (address(nyt).code.length == 0) {
             // token pair hasn't been deployed yet
             // do the deployment now
             // only need to check nyt since nyt and pyt are always deployed in pairs
             factory.deployYieldTokenPair(this, vault);
         }
-        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
 
         /// -----------------------------------------------------------------------
         /// State updates
@@ -1026,8 +993,8 @@ abstract contract Gate is ReentrancyGuard {
         uint256 underlyingAmount,
         uint256 updatedPricePerVaultShare
     ) internal virtual {
-        YieldToken nyt = getNegativeYieldTokenForVault(vault);
-        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         if (address(nyt).code.length == 0) {
             revert Error_TokenPairNotDeployed();
         }
@@ -1076,7 +1043,7 @@ abstract contract Gate is ReentrancyGuard {
         /// Validation
         /// -----------------------------------------------------------------------
 
-        YieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         if (address(pyt).code.length == 0) {
             revert Error_TokenPairNotDeployed();
         }
