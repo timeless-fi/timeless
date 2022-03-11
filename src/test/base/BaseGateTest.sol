@@ -1340,14 +1340,9 @@ abstract contract BaseGateTest is BaseTest {
             protocolFeeInfo_.fee != 0 &&
             protocolFeeInfo_.recipient == address(0)
         ) {
-            bytes memory err = new bytes(4);
-            bytes4 expectedErrSelector = bytes4(
-                keccak256("Error_ProtocolFeeRecipientIsZero()")
+            vm.expectRevert(
+                abi.encodeWithSignature("Error_ProtocolFeeRecipientIsZero()")
             );
-            for (uint256 i = 0; i < 4; i++) {
-                err[i] = expectedErrSelector[i];
-            }
-            vm.expectRevert(err);
             factory.ownerSetProtocolFee(protocolFeeInfo_);
         } else {
             factory.ownerSetProtocolFee(protocolFeeInfo_);
