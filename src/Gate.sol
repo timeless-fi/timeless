@@ -712,14 +712,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     }
 
     /// @notice Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
+    /// Accounts for protocol fees.
     /// @param vault The vault to query
     /// @param user The PYT holder to query
-    /// @return The amount of yield claimable
+    /// @return yieldAmount The amount of yield claimable
     function getClaimableYieldAmount(address vault, address user)
         external
         view
         virtual
-        returns (uint256)
+        returns (uint256 yieldAmount)
     {
         PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
@@ -727,18 +728,25 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             // uninitialized account
             return 0;
         }
-        return
-            _getClaimableYieldAmount(
+        yieldAmount = _getClaimableYieldAmount(
+            vault,
+            user,
+            _computeYieldPerToken(
                 vault,
-                user,
-                _computeYieldPerToken(
-                    vault,
-                    getPricePerVaultShare(vault),
-                    pyt.decimals()
-                ),
-                userYieldPerTokenStored_,
-                pyt.balanceOf(user)
-            );
+                getPricePerVaultShare(vault),
+                pyt.decimals()
+            ),
+            userYieldPerTokenStored_,
+            pyt.balanceOf(user)
+        );
+        (uint8 fee, ) = factory.protocolFeeInfo();
+        if (fee != 0) {
+            uint256 protocolFee = (yieldAmount * fee) / 1000;
+            unchecked {
+                // can't underflow since fee < 256
+                yieldAmount -= protocolFee;
+            }
+        }
     }
 
     /// @notice Computes the latest yieldPerToken value for a vault.
@@ -1081,7 +1089,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     }
 
     /// @dev Returns the amount of yield claimable by a PerpetualYieldToken holder from a vault.
-    /// Assumes userYieldPerTokenStored_ != 0.
+    /// Assumes userYieldPerTokenStored_ != 0. Does not account for protocol fees.
     function _getClaimableYieldAmount(
         address vault,
         address user,
