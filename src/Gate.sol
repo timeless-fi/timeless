@@ -51,15 +51,17 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// -----------------------------------------------------------------------
 
     event EnterWithUnderlying(
-        address indexed sender,
-        address indexed recipient,
+        address sender,
+        address indexed nytRecipient,
+        address indexed pytRecipient,
         address indexed vault,
         ERC4626 xPYT,
         uint256 underlyingAmount
     );
     event EnterWithVaultShares(
-        address indexed sender,
-        address indexed recipient,
+        address sender,
+        address indexed nytRecipient,
+        address indexed pytRecipient,
         address indexed vault,
         ERC4626 xPYT,
         uint256 vaultSharesAmount
@@ -91,8 +93,9 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         uint256 vaultSharesAmount
     );
     event ClaimYieldAndEnter(
-        address indexed sender,
-        address indexed recipient,
+        address sender,
+        address indexed nytRecipient,
+        address indexed pytRecipient,
         address indexed vault,
         ERC4626 xPYT,
         uint256 amount
@@ -158,13 +161,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// @dev The underlying tokens will be immediately deposited into the specified vault.
     /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// deploy them before proceeding, which will increase the gas cost significantly.
-    /// @param recipient The recipient of the minted NYT and PYT
+    /// @param nytRecipient The recipient of the minted NYT
+    /// @param pytRecipient The recipient of the minted PYT
     /// @param vault The vault to mint NYT and PYT for
     /// @param xPYT The xPYT contract to deposit the minted PYT into. Set to 0 to receive raw PYT instead.
     /// @param underlyingAmount The amount of underlying tokens to use
     /// @return mintAmount The amount of NYT and PYT minted (the amounts are equal)
     function enterWithUnderlying(
-        address recipient,
+        address nytRecipient,
+        address pytRecipient,
         address vault,
         ERC4626 xPYT,
         uint256 underlyingAmount
@@ -184,7 +189,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         // mint PYT and NYT
         mintAmount = underlyingAmount;
         _enter(
-            recipient,
+            nytRecipient,
+            pytRecipient,
             vault,
             xPYT,
             getUnderlyingOfVault(vault).decimals(),
@@ -205,7 +211,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
         emit EnterWithUnderlying(
             msg.sender,
-            recipient,
+            nytRecipient,
+            pytRecipient,
             vault,
             xPYT,
             underlyingAmount
@@ -216,13 +223,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// @dev Only available if vault shares are transferrable ERC20 tokens.
     /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// deploy them before proceeding, which will increase the gas cost significantly.
-    /// @param recipient The recipient of the minted NYT and PYT
+    /// @param nytRecipient The recipient of the minted NYT
+    /// @param pytRecipient The recipient of the minted PYT
     /// @param vault The vault to mint NYT and PYT for
     /// @param xPYT The xPYT contract to deposit the minted PYT into. Set to 0 to receive raw PYT instead.
     /// @param vaultSharesAmount The amount of vault share tokens to use
     /// @return mintAmount The amount of NYT and PYT minted (the amounts are equal)
     function enterWithVaultShares(
-        address recipient,
+        address nytRecipient,
+        address pytRecipient,
         address vault,
         ERC4626 xPYT,
         uint256 vaultSharesAmount
@@ -253,7 +262,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             updatedPricePerVaultShare
         );
         _enter(
-            recipient,
+            nytRecipient,
+            pytRecipient,
             vault,
             xPYT,
             underlyingDecimals,
@@ -270,7 +280,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
         emit EnterWithVaultShares(
             msg.sender,
-            recipient,
+            nytRecipient,
+            pytRecipient,
             vault,
             xPYT,
             vaultSharesAmount
@@ -577,12 +588,14 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// @dev Introduced to save gas for xPYT compounding, since it avoids vault withdraws/transfers.
     /// If the NYT and PYT for the specified vault haven't been deployed yet, this call will
     /// revert.
-    /// @param recipient The recipient of the yield
+    /// @param nytRecipient The recipient of the minted NYT
+    /// @param pytRecipient The recipient of the minted PYT
     /// @param vault The vault to claim yield from
     /// @param xPYT The xPYT contract to deposit the minted PYT into. Set to 0 to receive raw PYT instead.
     /// @return yieldAmount The amount of yield claimed, in underlying tokens
     function claimYieldAndEnter(
-        address recipient,
+        address nytRecipient,
+        address pytRecipient,
         address vault,
         ERC4626 xPYT
     ) external virtual nonReentrant returns (uint256 yieldAmount) {
@@ -645,11 +658,11 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             // accrue yield to recipient
             // no need to do it if the recipient is msg.sender, since
             // we already accrued yield in _claimYield
-            if (recipient != msg.sender) {
+            if (pytRecipient != msg.sender) {
                 _accrueYield(
                     vault,
                     pyt,
-                    recipient,
+                    pytRecipient,
                     underlyingDecimals,
                     updatedPricePerVaultShare
                 );
@@ -657,10 +670,10 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
             // mint NYTs and PYTs
             yieldTokenTotalSupply[vault] += yieldAmount;
-            nyt.gateMint(recipient, yieldAmount);
+            nyt.gateMint(nytRecipient, yieldAmount);
             if (address(xPYT) == address(0)) {
                 // mint raw PYT to recipient
-                pyt.gateMint(recipient, yieldAmount);
+                pyt.gateMint(pytRecipient, yieldAmount);
             } else {
                 // mint PYT and wrap in xPYT
                 pyt.gateMint(address(this), yieldAmount);
@@ -668,12 +681,13 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                     // set PYT approval
                     pyt.approve(address(xPYT), type(uint256).max);
                 }
-                xPYT.deposit(yieldAmount, recipient);
+                xPYT.deposit(yieldAmount, pytRecipient);
             }
 
             emit ClaimYieldAndEnter(
                 msg.sender,
-                recipient,
+                nytRecipient,
+                pytRecipient,
                 vault,
                 xPYT,
                 yieldAmount
@@ -941,7 +955,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
     /// @dev Mints PYTs and NYTs to the recipient given the amount of underlying deposited.
     function _enter(
-        address recipient,
+        address nytRecipient,
+        address pytRecipient,
         address vault,
         ERC4626 xPYT,
         uint8 underlyingDecimals,
@@ -965,17 +980,17 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         _accrueYield(
             vault,
             pyt,
-            recipient,
+            pytRecipient,
             underlyingDecimals,
             updatedPricePerVaultShare
         );
 
         // mint NYTs and PYTs
         yieldTokenTotalSupply[vault] += underlyingAmount;
-        nyt.gateMint(recipient, underlyingAmount);
+        nyt.gateMint(nytRecipient, underlyingAmount);
         if (address(xPYT) == address(0)) {
             // mint raw PYT to recipient
-            pyt.gateMint(recipient, underlyingAmount);
+            pyt.gateMint(pytRecipient, underlyingAmount);
         } else {
             // mint PYT and wrap in xPYT
             pyt.gateMint(address(this), underlyingAmount);
@@ -991,7 +1006,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             /// Effects
             /// -----------------------------------------------------------------------
 
-            xPYT.deposit(underlyingAmount, recipient);
+            xPYT.deposit(underlyingAmount, pytRecipient);
         }
     }
 

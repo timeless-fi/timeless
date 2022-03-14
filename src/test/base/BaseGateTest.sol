@@ -24,6 +24,8 @@ abstract contract BaseGateTest is BaseTest {
     address internal constant tester = address(0x69);
     address internal constant tester1 = address(0xabcd);
     address internal constant recipient = address(0xbeef);
+    address internal constant nytRecipient = address(0x01);
+    address internal constant pytRecipient = address(0x02);
     address internal constant initialDepositor = address(0x420);
     address internal constant protocolFeeRecipient = address(0x6969);
     uint256 internal constant PROTOCOL_FEE = 100; // 10%
@@ -77,7 +79,8 @@ abstract contract BaseGateTest is BaseTest {
         // enter
         uint256 beforeVaultUnderlyingBalance = underlying.balanceOf(vault);
         uint256 mintAmount = gate.enterWithUnderlying(
-            recipient,
+            nytRecipient,
+            pytRecipient,
             vault,
             xPYT,
             underlyingAmount
@@ -95,12 +98,14 @@ abstract contract BaseGateTest is BaseTest {
         NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         assertEqDecimal(
-            nyt.balanceOf(recipient),
+            nyt.balanceOf(nytRecipient),
             underlyingAmount,
             underlyingDecimals
         );
         assertEqDecimal(
-            useXPYT ? xPYT.balanceOf(recipient) : pyt.balanceOf(recipient),
+            useXPYT
+                ? xPYT.balanceOf(pytRecipient)
+                : pyt.balanceOf(pytRecipient),
             underlyingAmount,
             underlyingDecimals
         );
@@ -152,7 +157,8 @@ abstract contract BaseGateTest is BaseTest {
         // enter
         ERC20(vault).approve(address(gate), type(uint256).max);
         uint256 mintAmount = gate.enterWithVaultShares(
-            recipient,
+            nytRecipient,
+            pytRecipient,
             vault,
             xPYT,
             vaultSharesAmount
@@ -171,13 +177,15 @@ abstract contract BaseGateTest is BaseTest {
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         uint256 epsilonInv = 10**53;
         assertEqDecimalEpsilonBelow(
-            nyt.balanceOf(recipient),
+            nyt.balanceOf(nytRecipient),
             underlyingAmount,
             underlyingDecimals,
             epsilonInv
         );
         assertEqDecimalEpsilonBelow(
-            useXPYT ? xPYT.balanceOf(recipient) : pyt.balanceOf(recipient),
+            useXPYT
+                ? xPYT.balanceOf(pytRecipient)
+                : pyt.balanceOf(pytRecipient),
             underlyingAmount,
             underlyingDecimals,
             epsilonInv
@@ -237,7 +245,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, xPYT, underlyingAmount);
+        gate.enterWithUnderlying(tester, tester, vault, xPYT, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -352,7 +360,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, xPYT, underlyingAmount);
+        gate.enterWithUnderlying(tester, tester, vault, xPYT, underlyingAmount);
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -489,7 +497,13 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -605,7 +619,13 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -716,7 +736,13 @@ abstract contract BaseGateTest is BaseTest {
 
         // enter
         // receive raw PYT
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -765,7 +791,12 @@ abstract contract BaseGateTest is BaseTest {
         }
 
         // claim yield
-        uint256 claimedYield = gate.claimYieldAndEnter(recipient, vault, xPYT);
+        uint256 claimedYield = gate.claimYieldAndEnter(
+            nytRecipient,
+            pytRecipient,
+            vault,
+            xPYT
+        );
 
         // check received yield
         uint256 epsilonInv = min(10**(underlyingDecimals - 3), 10**6);
@@ -776,16 +807,16 @@ abstract contract BaseGateTest is BaseTest {
             epsilonInv
         );
         assertEqDecimalEpsilonAround(
-            gate.getNegativeYieldTokenForVault(vault).balanceOf(recipient),
+            gate.getNegativeYieldTokenForVault(vault).balanceOf(nytRecipient),
             claimedYield,
             underlyingDecimals,
             epsilonInv
         );
         assertEqDecimalEpsilonAround(
             useXPYT
-                ? xPYT.balanceOf(recipient)
+                ? xPYT.balanceOf(pytRecipient)
                 : gate.getPerpetualYieldTokenForVault(vault).balanceOf(
-                    recipient
+                    pytRecipient
                 ),
             claimedYield,
             underlyingDecimals,
@@ -854,7 +885,13 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -964,7 +1001,13 @@ abstract contract BaseGateTest is BaseTest {
 
         // enter
         underlying.mint(tester, underlyingAmount);
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // switch to tester1
         vm.stopPrank();
@@ -973,7 +1016,13 @@ abstract contract BaseGateTest is BaseTest {
         // enter
         underlying.mint(tester1, underlyingAmount);
         underlying.approve(address(gate), type(uint256).max);
-        gate.enterWithUnderlying(tester1, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester1,
+            tester1,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // switch to tester
         vm.stopPrank();
@@ -1089,7 +1138,13 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // mint additional yield to the vault
         // the minimum amount of yield the vault can distribute is limited by the precision
@@ -1205,7 +1260,13 @@ abstract contract BaseGateTest is BaseTest {
 
         // enter
         underlying.mint(tester, underlyingAmount);
-        gate.enterWithUnderlying(tester, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // switch to tester1
         vm.stopPrank();
@@ -1214,7 +1275,13 @@ abstract contract BaseGateTest is BaseTest {
         // enter
         underlying.mint(tester1, underlyingAmount);
         underlying.approve(address(gate), type(uint256).max);
-        gate.enterWithUnderlying(tester1, vault, XPYT_NULL, underlyingAmount);
+        gate.enterWithUnderlying(
+            tester1,
+            tester1,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
 
         // switch to tester
         vm.stopPrank();
