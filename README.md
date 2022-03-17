@@ -51,7 +51,7 @@ This project uses [Foundry](https://github.com/gakonst/foundry) as the developme
 ### Dependencies
 
 ```
-make update
+make install
 ```
 
 ### Compilation
