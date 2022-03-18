@@ -48,7 +48,8 @@ contract ERC4626Gate is Gate {
         override
         returns (uint256)
     {
-        return ERC4626(vault).assetsPerShare();
+        ERC4626 erc4626Vault = ERC4626(vault);
+        return erc4626Vault.convertToAssets(10**erc4626Vault.decimals());
     }
 
     function getVaultShareBalance(address vault)
