@@ -175,7 +175,7 @@ abstract contract BaseGateTest is BaseTest {
         // recipient received NYT and PYT
         NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
-        uint256 epsilonInv = 10**53;
+        uint256 epsilonInv = 10**underlyingDecimals;
         assertEqDecimalEpsilonBelow(
             nyt.balanceOf(nytRecipient),
             underlyingAmount,
@@ -279,7 +279,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // check balances
-        uint256 epsilonInv = 10**52;
+        uint256 epsilonInv = 10**underlyingDecimals;
         // underlying transferred to tester
         assertEqDecimalEpsilonBelow(
             underlying.balanceOf(recipient),
@@ -1341,7 +1341,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // tester should've received the correct amount of yield
-        uint256 epsilonInv = min(10**(underlyingDecimals - 1), 10**6);
+        uint256 epsilonInv = min(10**(underlyingDecimals - 2), 10**6);
         assertEqDecimalEpsilonAround(
             testerClaimedYield,
             expectedYield,
