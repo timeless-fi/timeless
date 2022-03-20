@@ -473,6 +473,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
+        uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(vault);
         gate.enterWithUnderlying(
             tester,
             tester,
@@ -491,10 +492,11 @@ abstract contract BaseGateTest is BaseTest {
             vault
         );
         underlying.mint(vault, additionalYieldAmount);
+        uint256 afterPricePerVaultShare = gate.getPricePerVaultShare(vault);
         uint256 expectedYield = (FullMath.mulDiv(
-            additionalYieldAmount,
-            gate.getVaultShareBalance(vault),
-            ERC20(vault).totalSupply()
+            underlyingAmount,
+            afterPricePerVaultShare - beforePricePerVaultShare,
+            beforePricePerVaultShare
         ) * (1000 - PROTOCOL_FEE)) / 1000;
         uint256 expectedFee = (expectedYield * PROTOCOL_FEE) /
             (1000 - PROTOCOL_FEE);
@@ -578,6 +580,7 @@ abstract contract BaseGateTest is BaseTest {
         underlying.mint(tester, underlyingAmount);
 
         // enter
+        uint256 beforePricePerVaultShare = gate.getPricePerVaultShare(vault);
         gate.enterWithUnderlying(
             tester,
             tester,
@@ -596,22 +599,23 @@ abstract contract BaseGateTest is BaseTest {
             vault
         );
         underlying.mint(vault, additionalYieldAmount);
+        uint256 afterPricePerVaultShare = gate.getPricePerVaultShare(vault);
 
-        uint256 expectedYield = (FullMath.mulDiv(
-            additionalYieldAmount,
-            gate.getVaultShareBalance(vault),
-            ERC20(vault).totalSupply()
-        ) * (1000 - PROTOCOL_FEE)) / 1000;
-        expectedYield = _underlyingAmountToVaultSharesAmount(
-            vault,
-            expectedYield
+        uint256 expectedYield = FullMath.mulDiv(
+            underlyingAmount,
+            afterPricePerVaultShare - beforePricePerVaultShare,
+            beforePricePerVaultShare
         );
+        expectedYield =
+            (_underlyingAmountToVaultSharesAmount(vault, expectedYield) *
+                (1000 - PROTOCOL_FEE)) /
+            1000;
 
         // claim yield
         uint256 claimedYield = gate.claimYieldInVaultShares(recipient, vault);
 
         // check received yield
-        uint256 epsilonInv = min(10**underlyingDecimals, 10**6);
+        uint256 epsilonInv = min(10**(underlyingDecimals - 3), 10**6);
         console.log(claimedYield, expectedYield);
 
         assertEqDecimalEpsilonAround(
@@ -1273,12 +1277,12 @@ abstract contract BaseGateTest is BaseTest {
 
         // ensure underlying amount is large enough
         if (underlyingAmount < 10**underlyingDecimals) {
-            underlyingAmount = uint120(10**(underlyingDecimals - 4));
+            underlyingAmount = uint120(10**(underlyingDecimals - 3));
         }
 
         // ensure initial underlying amount is large enough
         if (initialUnderlyingAmount < 10**underlyingDecimals) {
-            initialUnderlyingAmount = uint120(10**(underlyingDecimals - 4));
+            initialUnderlyingAmount = uint120(10**(underlyingDecimals - 3));
         }
 
         // bound the initial yield below 100x the initial underlying
