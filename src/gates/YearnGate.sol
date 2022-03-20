@@ -7,6 +7,7 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 import {Gate} from "../Gate.sol";
 import {Factory} from "../Factory.sol";
 import {ERC20Gate} from "./ERC20Gate.sol";
+import {FullMath} from "../lib/FullMath.sol";
 import {YearnVault} from "../external/YearnVault.sol";
 
 /// @title YearnGate
@@ -48,7 +49,13 @@ contract YearnGate is ERC20Gate {
         override
         returns (uint256)
     {
-        return YearnVault(vault).pricePerShare();
+        YearnVault yearnVault = YearnVault(vault);
+        return
+            FullMath.mulDiv(
+                yearnVault.pricePerShare(),
+                PRECISION,
+                10**yearnVault.decimals()
+            );
     }
 
     /// -----------------------------------------------------------------------
@@ -73,13 +80,12 @@ contract YearnGate is ERC20Gate {
         address recipient,
         address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals,
         uint256 pricePerVaultShare,
         bool checkBalance
     ) internal virtual override returns (uint256 withdrawnUnderlyingAmount) {
         uint256 shareAmount = _underlyingAmountToVaultSharesAmount(
+            vault,
             underlyingAmount,
-            underlyingDecimals,
             pricePerVaultShare
         );
 
@@ -95,5 +101,24 @@ contract YearnGate is ERC20Gate {
             shareAmount,
             recipient
         );
+    }
+
+    /// @inheritdoc Gate
+    function _vaultSharesAmountToUnderlyingAmount(
+        address, /*vault*/
+        uint256 vaultSharesAmount,
+        uint256 pricePerVaultShare
+    ) internal view virtual override returns (uint256) {
+        return
+            FullMath.mulDiv(vaultSharesAmount, pricePerVaultShare, PRECISION);
+    }
+
+    /// @inheritdoc Gate
+    function _underlyingAmountToVaultSharesAmount(
+        address, /*vault*/
+        uint256 underlyingAmount,
+        uint256 pricePerVaultShare
+    ) internal view virtual override returns (uint256) {
+        return FullMath.mulDiv(underlyingAmount, PRECISION, pricePerVaultShare);
     }
 }

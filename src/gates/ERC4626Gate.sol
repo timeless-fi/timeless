@@ -7,12 +7,13 @@ import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Gate} from "../Gate.sol";
 import {Factory} from "../Factory.sol";
+import {ERC20Gate} from "./ERC20Gate.sol";
 import {FullMath} from "../lib/FullMath.sol";
 
 /// @title ERC4626Gate
 /// @author zefram.eth
 /// @notice The Gate implementation for ERC4626 vaults
-contract ERC4626Gate is Gate {
+contract ERC4626Gate is ERC20Gate {
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
@@ -23,7 +24,7 @@ contract ERC4626Gate is Gate {
     /// Initialization
     /// -----------------------------------------------------------------------
 
-    constructor(Factory factory_) Gate(factory_) {}
+    constructor(Factory factory_) ERC20Gate(factory_) {}
 
     /// -----------------------------------------------------------------------
     /// Getters
@@ -52,85 +53,6 @@ contract ERC4626Gate is Gate {
         return erc4626Vault.convertToAssets(10**erc4626Vault.decimals());
     }
 
-    function getVaultShareBalance(address vault)
-        public
-        view
-        virtual
-        override
-        returns (uint256)
-    {
-        return ERC4626(vault).balanceOf(address(this));
-    }
-
-    /// @inheritdoc Gate
-    function vaultSharesIsERC20() public pure virtual override returns (bool) {
-        return true;
-    }
-
-    /// @inheritdoc Gate
-    function negativeYieldTokenName(address vault)
-        external
-        view
-        virtual
-        override
-        returns (string memory)
-    {
-        return
-            string(
-                abi.encodePacked(
-                    "Timeless ",
-                    ERC4626(vault).name(),
-                    " Negative Yield Token"
-                )
-            );
-    }
-
-    /// @inheritdoc Gate
-    function negativeYieldTokenSymbol(address vault)
-        external
-        view
-        virtual
-        override
-        returns (string memory)
-    {
-        return
-            string(
-                abi.encodePacked(unicode"∞-", ERC4626(vault).symbol(), "-NYT")
-            );
-    }
-
-    /// @inheritdoc Gate
-    function perpetualYieldTokenName(address vault)
-        external
-        view
-        virtual
-        override
-        returns (string memory)
-    {
-        return
-            string(
-                abi.encodePacked(
-                    "Timeless ",
-                    ERC4626(vault).name(),
-                    " Perpetual Yield Token"
-                )
-            );
-    }
-
-    /// @inheritdoc Gate
-    function perpetualYieldTokenSymbol(address vault)
-        external
-        view
-        virtual
-        override
-        returns (string memory)
-    {
-        return
-            string(
-                abi.encodePacked(unicode"∞-", ERC4626(vault).symbol(), "-PYT")
-            );
-    }
-
     /// -----------------------------------------------------------------------
     /// Internal utilities
     /// -----------------------------------------------------------------------
@@ -153,28 +75,43 @@ contract ERC4626Gate is Gate {
         address recipient,
         address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals,
-        uint256 pricePerVaultShare,
+        uint256, /*pricePerVaultShare*/
         bool checkBalance
     ) internal virtual override returns (uint256 withdrawnUnderlyingAmount) {
-        uint256 shareAmount = _underlyingAmountToVaultSharesAmount(
-            underlyingAmount,
-            underlyingDecimals,
-            pricePerVaultShare
-        );
-
         if (checkBalance) {
-            uint256 shareBalance = getVaultShareBalance(vault);
-            if (shareAmount > shareBalance) {
-                // rounding error, withdraw entire balance
-                shareAmount = shareBalance;
+            uint256 maxWithdrawAmount = ERC4626(vault).maxWithdraw(
+                address(this)
+            );
+            if (underlyingAmount > maxWithdrawAmount) {
+                return
+                    ERC4626(vault).withdraw(
+                        maxWithdrawAmount,
+                        recipient,
+                        address(this)
+                    );
             }
         }
 
-        withdrawnUnderlyingAmount = ERC4626(vault).redeem(
-            shareAmount,
-            recipient,
-            address(this)
-        );
+        // we know we have enough shares, use withdraw
+        ERC4626(vault).withdraw(underlyingAmount, recipient, address(this));
+        return underlyingAmount;
+    }
+
+    /// @inheritdoc Gate
+    function _vaultSharesAmountToUnderlyingAmount(
+        address vault,
+        uint256 vaultSharesAmount,
+        uint256 /*pricePerVaultShare*/
+    ) internal view virtual override returns (uint256) {
+        return ERC4626(vault).convertToAssets(vaultSharesAmount);
+    }
+
+    /// @inheritdoc Gate
+    function _underlyingAmountToVaultSharesAmount(
+        address vault,
+        uint256 underlyingAmount,
+        uint256 /*pricePerVaultShare*/
+    ) internal view virtual override returns (uint256) {
+        return ERC4626(vault).convertToShares(underlyingAmount);
     }
 }

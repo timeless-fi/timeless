@@ -2,6 +2,7 @@
 pragma solidity ^0.8.4;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Gate} from "../../Gate.sol";
 import {FullMath} from "../../lib/FullMath.sol";
@@ -67,5 +68,19 @@ contract ERC4626GateTest is BaseGateTest {
         returns (string memory)
     {
         return unicode"∞-TEST-ERC4626-PYT";
+    }
+
+    function _vaultSharesAmountToUnderlyingAmount(
+        address vault,
+        uint256 vaultSharesAmount
+    ) internal view virtual override returns (uint256) {
+        return ERC4626(vault).convertToAssets(vaultSharesAmount);
+    }
+
+    function _underlyingAmountToVaultSharesAmount(
+        address vault,
+        uint256 underlyingAmount
+    ) internal view virtual override returns (uint256) {
+        return ERC4626(vault).convertToShares(underlyingAmount);
     }
 }

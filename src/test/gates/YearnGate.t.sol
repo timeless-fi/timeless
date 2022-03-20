@@ -67,4 +67,28 @@ contract YearnGateTest is BaseGateTest {
     {
         return unicode"∞-yTEST-PYT";
     }
+
+    function _vaultSharesAmountToUnderlyingAmount(
+        address vault,
+        uint256 vaultSharesAmount
+    ) internal view virtual override returns (uint256) {
+        return
+            FullMath.mulDiv(
+                vaultSharesAmount,
+                gate.getPricePerVaultShare(vault),
+                PRECISION
+            );
+    }
+
+    function _underlyingAmountToVaultSharesAmount(
+        address vault,
+        uint256 underlyingAmount
+    ) internal view virtual override returns (uint256) {
+        return
+            FullMath.mulDiv(
+                underlyingAmount,
+                PRECISION,
+                gate.getPricePerVaultShare(vault)
+            );
+    }
 }
