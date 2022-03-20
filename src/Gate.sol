@@ -105,8 +105,11 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// Constants
     /// -----------------------------------------------------------------------
 
+    /// @notice The decimals of precision used by yieldPerTokenStored and pricePerVaultShareStored
+    uint256 internal constant PRECISION_DECIMALS = 27;
+
     /// @notice The precision used by yieldPerTokenStored and pricePerVaultShareStored
-    uint256 internal constant PRECISION = 10**27;
+    uint256 internal constant PRECISION = 10**PRECISION_DECIMALS;
 
     /// -----------------------------------------------------------------------
     /// Immutable parameters

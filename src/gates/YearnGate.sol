@@ -51,11 +51,8 @@ contract YearnGate is ERC20Gate {
     {
         YearnVault yearnVault = YearnVault(vault);
         return
-            FullMath.mulDiv(
-                yearnVault.pricePerShare(),
-                PRECISION,
-                10**yearnVault.decimals()
-            );
+            yearnVault.pricePerShare() *
+            10**(PRECISION_DECIMALS - yearnVault.decimals());
     }
 
     /// -----------------------------------------------------------------------
