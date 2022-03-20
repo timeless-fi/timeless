@@ -105,7 +105,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// Constants
     /// -----------------------------------------------------------------------
 
-    /// @notice The precision used by yieldPerTokenStored
+    /// @notice The precision used by yieldPerTokenStored and pricePerVaultShareStored
     uint256 internal constant PRECISION = 10**27;
 
     /// -----------------------------------------------------------------------
@@ -119,6 +119,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// -----------------------------------------------------------------------
 
     /// @notice The amount of underlying tokens each vault share is worth, at the time of the last update.
+    /// Uses PRECISION.
     /// @dev vault => value
     mapping(address => uint256) public pricePerVaultShareStored;
 
@@ -141,6 +142,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
     /// @notice The total supply of the yield tokens of a certain vault. Since PYTs and NYTs
     /// are always created in pairs, they always have the same total supply.
+    /// Uses PRECISION.
     /// @dev vault => value
     mapping(address => uint256) public yieldTokenTotalSupply;
 
