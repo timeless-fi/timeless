@@ -15,8 +15,12 @@ contract TestYearnVault is ERC20 {
     }
 
     function deposit(uint256 tokenAmount) public returns (uint256 shareAmount) {
-        uint256 sharePrice = pricePerShare();
-        shareAmount = (tokenAmount * BASE_UNIT) / sharePrice;
+        uint256 tokenBalance = token.balanceOf(address(this));
+        if (tokenBalance == 0) {
+            shareAmount = tokenAmount;
+        } else {
+            shareAmount = (tokenAmount * totalSupply) / tokenBalance;
+        }
         _mint(msg.sender, shareAmount);
 
         token.transferFrom(msg.sender, address(this), tokenAmount);
@@ -26,8 +30,9 @@ contract TestYearnVault is ERC20 {
         public
         returns (uint256 underlyingAmount)
     {
-        uint256 sharePrice = pricePerShare();
-        underlyingAmount = (sharesAmount * sharePrice) / BASE_UNIT;
+        underlyingAmount =
+            (sharesAmount * token.balanceOf(address(this))) /
+            totalSupply;
         _burn(msg.sender, sharesAmount);
 
         token.transfer(msg.sender, underlyingAmount);
@@ -37,8 +42,9 @@ contract TestYearnVault is ERC20 {
         public
         returns (uint256 underlyingAmount)
     {
-        uint256 sharePrice = pricePerShare();
-        underlyingAmount = (sharesAmount * sharePrice) / BASE_UNIT;
+        underlyingAmount =
+            (sharesAmount * token.balanceOf(address(this))) /
+            totalSupply;
         _burn(msg.sender, sharesAmount);
 
         token.transfer(recipient, underlyingAmount);

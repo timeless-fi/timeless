@@ -2,18 +2,18 @@
 pragma solidity ^0.8.4;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Gate} from "../Gate.sol";
 import {Factory} from "../Factory.sol";
 import {ERC20Gate} from "./ERC20Gate.sol";
 import {FullMath} from "../lib/FullMath.sol";
-import {YearnVault} from "../external/YearnVault.sol";
 
-/// @title YearnGate
+/// @title ERC4626Gate
 /// @author zefram.eth
-/// @notice The Gate implementation for Yearn vaults
-contract YearnGate is ERC20Gate {
+/// @notice The Gate implementation for ERC4626 vaults
+contract ERC4626Gate is ERC20Gate {
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
@@ -38,7 +38,7 @@ contract YearnGate is ERC20Gate {
         override
         returns (ERC20)
     {
-        return ERC20(YearnVault(vault).token());
+        return ERC4626(vault).asset();
     }
 
     /// @inheritdoc Gate
@@ -49,10 +49,7 @@ contract YearnGate is ERC20Gate {
         override
         returns (uint256)
     {
-        YearnVault yearnVault = YearnVault(vault);
-        return
-            yearnVault.pricePerShare() *
-            10**(PRECISION_DECIMALS - yearnVault.decimals());
+        return ERC4626(vault).convertToAssets(PRECISION);
     }
 
     /// -----------------------------------------------------------------------
@@ -69,7 +66,7 @@ contract YearnGate is ERC20Gate {
             underlying.safeApprove(vault, type(uint256).max);
         }
 
-        YearnVault(vault).deposit(underlyingAmount);
+        ERC4626(vault).deposit(underlyingAmount, address(this));
     }
 
     /// @inheritdoc Gate
@@ -77,45 +74,44 @@ contract YearnGate is ERC20Gate {
         address recipient,
         address vault,
         uint256 underlyingAmount,
-        uint256 pricePerVaultShare,
+        uint256, /*pricePerVaultShare*/
         bool checkBalance
     ) internal virtual override returns (uint256 withdrawnUnderlyingAmount) {
-        uint256 shareAmount = _underlyingAmountToVaultSharesAmount(
-            vault,
-            underlyingAmount,
-            pricePerVaultShare
-        );
-
+        checkBalance = true;
         if (checkBalance) {
-            uint256 shareBalance = getVaultShareBalance(vault);
-            if (shareAmount > shareBalance) {
-                // rounding error, withdraw entire balance
-                shareAmount = shareBalance;
+            uint256 maxWithdrawAmount = ERC4626(vault).maxWithdraw(
+                address(this)
+            );
+            if (underlyingAmount > maxWithdrawAmount) {
+                return
+                    ERC4626(vault).withdraw(
+                        maxWithdrawAmount,
+                        recipient,
+                        address(this)
+                    );
             }
         }
 
-        withdrawnUnderlyingAmount = YearnVault(vault).withdraw(
-            shareAmount,
-            recipient
-        );
+        // we know we have enough shares, use withdraw
+        ERC4626(vault).withdraw(underlyingAmount, recipient, address(this));
+        return underlyingAmount;
     }
 
     /// @inheritdoc Gate
     function _vaultSharesAmountToUnderlyingAmount(
-        address, /*vault*/
+        address vault,
         uint256 vaultSharesAmount,
-        uint256 pricePerVaultShare
+        uint256 /*pricePerVaultShare*/
     ) internal view virtual override returns (uint256) {
-        return
-            FullMath.mulDiv(vaultSharesAmount, pricePerVaultShare, PRECISION);
+        return ERC4626(vault).convertToAssets(vaultSharesAmount);
     }
 
     /// @inheritdoc Gate
     function _underlyingAmountToVaultSharesAmount(
-        address, /*vault*/
+        address vault,
         uint256 underlyingAmount,
-        uint256 pricePerVaultShare
+        uint256 /*pricePerVaultShare*/
     ) internal view virtual override returns (uint256) {
-        return FullMath.mulDiv(underlyingAmount, PRECISION, pricePerVaultShare);
+        return ERC4626(vault).convertToShares(underlyingAmount);
     }
 }

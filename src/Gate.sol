@@ -105,8 +105,11 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// Constants
     /// -----------------------------------------------------------------------
 
-    /// @notice The precision used by yieldPerTokenStored
-    uint256 internal constant PRECISION = 10**27;
+    /// @notice The decimals of precision used by yieldPerTokenStored and pricePerVaultShareStored
+    uint256 internal constant PRECISION_DECIMALS = 27;
+
+    /// @notice The precision used by yieldPerTokenStored and pricePerVaultShareStored
+    uint256 internal constant PRECISION = 10**PRECISION_DECIMALS;
 
     /// -----------------------------------------------------------------------
     /// Immutable parameters
@@ -119,6 +122,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// -----------------------------------------------------------------------
 
     /// @notice The amount of underlying tokens each vault share is worth, at the time of the last update.
+    /// Uses PRECISION.
     /// @dev vault => value
     mapping(address => uint256) public pricePerVaultShareStored;
 
@@ -141,6 +145,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
     /// @notice The total supply of the yield tokens of a certain vault. Since PYTs and NYTs
     /// are always created in pairs, they always have the same total supply.
+    /// Uses PRECISION.
     /// @dev vault => value
     mapping(address => uint256) public yieldTokenTotalSupply;
 
@@ -193,7 +198,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             pytRecipient,
             vault,
             xPYT,
-            getUnderlyingOfVault(vault).decimals(),
             underlyingAmount,
             getPricePerVaultShare(vault)
         );
@@ -254,11 +258,10 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // mint PYT and NYT
-        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         mintAmount = _vaultSharesAmountToUnderlyingAmount(
+            vault,
             vaultSharesAmount,
-            underlyingDecimals,
             updatedPricePerVaultShare
         );
         _enter(
@@ -266,7 +269,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             pytRecipient,
             vault,
             xPYT,
-            underlyingDecimals,
             mintAmount,
             updatedPricePerVaultShare
         );
@@ -317,16 +319,9 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // burn PYT and NYT
-        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         burnAmount = underlyingAmount;
-        _exit(
-            vault,
-            xPYT,
-            underlyingDecimals,
-            underlyingAmount,
-            updatedPricePerVaultShare
-        );
+        _exit(vault, xPYT, underlyingAmount, updatedPricePerVaultShare);
 
         // withdraw underlying from vault to recipient
         // don't check balance since user can just withdraw slightly less
@@ -335,7 +330,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             recipient,
             vault,
             underlyingAmount,
-            underlyingDecimals,
             updatedPricePerVaultShare,
             false
         );
@@ -383,20 +377,13 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // burn PYT and NYT
-        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         burnAmount = _vaultSharesAmountToUnderlyingAmount(
-            vaultSharesAmount,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
-        _exit(
             vault,
-            xPYT,
-            underlyingDecimals,
-            burnAmount,
+            vaultSharesAmount,
             updatedPricePerVaultShare
         );
+        _exit(vault, xPYT, burnAmount, updatedPricePerVaultShare);
 
         // transfer vault tokens to recipient
         ERC20(vault).safeTransfer(recipient, vaultSharesAmount);
@@ -427,13 +414,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // update storage variables and compute yield amount
-        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        yieldAmount = _claimYield(
-            vault,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
+        yieldAmount = _claimYield(vault, updatedPricePerVaultShare);
 
         // withdraw yield
         if (yieldAmount != 0) {
@@ -455,10 +437,16 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                     // vault shares are in ERC20
                     // do share transfer
                     protocolFee = _underlyingAmountToVaultSharesAmount(
+                        vault,
                         protocolFee,
-                        underlyingDecimals,
                         updatedPricePerVaultShare
                     );
+                    uint256 vaultSharesBalance = ERC20(vault).balanceOf(
+                        address(this)
+                    );
+                    if (protocolFee > vaultSharesBalance) {
+                        protocolFee = vaultSharesBalance;
+                    }
                     if (protocolFee != 0) {
                         ERC20(vault).safeTransfer(
                             protocolFeeRecipient,
@@ -468,16 +456,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                 } else {
                     // vault shares are not in ERC20
                     // withdraw underlying from vault
-                    // checkBalance is set to false since we know there will
-                    // still be nonnegligible vault shares after this
+                    // checkBalance is set to true to prevent getting stuck
+                    // due to rounding errors
                     if (protocolFee != 0) {
                         _withdrawFromVault(
                             protocolFeeRecipient,
                             vault,
                             protocolFee,
-                            underlyingDecimals,
                             updatedPricePerVaultShare,
-                            false
+                            true
                         );
                     }
                 }
@@ -490,7 +477,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                 recipient,
                 vault,
                 yieldAmount,
-                underlyingDecimals,
                 updatedPricePerVaultShare,
                 true
             );
@@ -531,13 +517,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // update storage variables and compute yield amount
-        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        yieldAmount = _claimYield(
-            vault,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
+        yieldAmount = _claimYield(vault, updatedPricePerVaultShare);
 
         // withdraw yield
         if (yieldAmount != 0) {
@@ -547,32 +528,43 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
             // convert yieldAmount to be denominated in vault shares
             yieldAmount = _underlyingAmountToVaultSharesAmount(
+                vault,
                 yieldAmount,
-                underlyingDecimals,
                 updatedPricePerVaultShare
             );
 
             (uint8 fee, address protocolFeeRecipient) = factory
                 .protocolFeeInfo();
-
+            uint256 vaultSharesBalance = getVaultShareBalance(vault);
             if (fee != 0) {
                 uint256 protocolFee = (yieldAmount * fee) / 1000;
+                protocolFee = protocolFee > vaultSharesBalance
+                    ? vaultSharesBalance
+                    : protocolFee;
                 unchecked {
                     // can't underflow since fee < 256
                     yieldAmount -= protocolFee;
                 }
 
-                ERC20(vault).safeTransfer(protocolFeeRecipient, protocolFee);
+                if (protocolFee > 0) {
+                    ERC20(vault).safeTransfer(
+                        protocolFeeRecipient,
+                        protocolFee
+                    );
+
+                    vaultSharesBalance -= protocolFee;
+                }
             }
 
             // transfer vault shares to recipient
             // check if vault shares is enough to prevent getting stuck
             // from rounding errors
-            uint256 vaultSharesBalance = getVaultShareBalance(vault);
             yieldAmount = yieldAmount > vaultSharesBalance
                 ? vaultSharesBalance
                 : yieldAmount;
-            ERC20(vault).safeTransfer(recipient, yieldAmount);
+            if (yieldAmount > 0) {
+                ERC20(vault).safeTransfer(recipient, yieldAmount);
+            }
 
             emit ClaimYieldInVaultShares(
                 msg.sender,
@@ -600,13 +592,8 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         ERC4626 xPYT
     ) external virtual nonReentrant returns (uint256 yieldAmount) {
         // update storage variables and compute yield amount
-        uint8 underlyingDecimals = getUnderlyingOfVault(vault).decimals();
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        yieldAmount = _claimYield(
-            vault,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
+        yieldAmount = _claimYield(vault, updatedPricePerVaultShare);
 
         // use yield to mint NYT and PYT
         if (yieldAmount != 0) {
@@ -624,10 +611,16 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                     // vault shares are in ERC20
                     // do share transfer
                     protocolFee = _underlyingAmountToVaultSharesAmount(
+                        vault,
                         protocolFee,
-                        underlyingDecimals,
                         updatedPricePerVaultShare
                     );
+                    uint256 vaultSharesBalance = ERC20(vault).balanceOf(
+                        address(this)
+                    );
+                    if (protocolFee > vaultSharesBalance) {
+                        protocolFee = vaultSharesBalance;
+                    }
                     if (protocolFee != 0) {
                         ERC20(vault).safeTransfer(
                             protocolFeeRecipient,
@@ -637,16 +630,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                 } else {
                     // vault shares are not in ERC20
                     // withdraw underlying from vault
-                    // checkBalance is set to false since we know there will
-                    // still be nonnegligible vault shares after this
+                    // checkBalance is set to true to prevent getting stuck
+                    // due to rounding errors
                     if (protocolFee != 0) {
                         _withdrawFromVault(
                             protocolFeeRecipient,
                             vault,
                             protocolFee,
-                            underlyingDecimals,
                             updatedPricePerVaultShare,
-                            false
+                            true
                         );
                     }
                 }
@@ -663,7 +655,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                     vault,
                     pyt,
                     pytRecipient,
-                    underlyingDecimals,
                     updatedPricePerVaultShare
                 );
             }
@@ -745,11 +736,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         yieldAmount = _getClaimableYieldAmount(
             vault,
             user,
-            _computeYieldPerToken(
-                vault,
-                getPricePerVaultShare(vault),
-                pyt.decimals()
-            ),
+            _computeYieldPerToken(vault, getPricePerVaultShare(vault)),
             userYieldPerTokenStored_,
             pyt.balanceOf(user)
         );
@@ -772,13 +759,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         virtual
         returns (uint256)
     {
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        return
-            _computeYieldPerToken(
-                vault,
-                getPricePerVaultShare(vault),
-                pyt.decimals()
-            );
+        return _computeYieldPerToken(vault, getPricePerVaultShare(vault));
     }
 
     /// @notice Returns the underlying token of a vault.
@@ -888,8 +869,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
-            updatedPricePerVaultShare,
-            pyt.decimals()
+            updatedPricePerVaultShare
         );
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
@@ -930,13 +910,11 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address vault,
         PerpetualYieldToken pyt,
         address user,
-        uint8 underlyingDecimals,
         uint256 updatedPricePerVaultShare
     ) internal virtual {
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
-            updatedPricePerVaultShare,
-            underlyingDecimals
+            updatedPricePerVaultShare
         );
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
         if (userYieldPerTokenStored_ != 0) {
@@ -959,7 +937,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address pytRecipient,
         address vault,
         ERC4626 xPYT,
-        uint8 underlyingDecimals,
         uint256 underlyingAmount,
         uint256 updatedPricePerVaultShare
     ) internal virtual {
@@ -977,13 +954,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(
-            vault,
-            pyt,
-            pytRecipient,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
+        _accrueYield(vault, pyt, pytRecipient, updatedPricePerVaultShare);
 
         // mint NYTs and PYTs
         yieldTokenTotalSupply[vault] += underlyingAmount;
@@ -1014,7 +985,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     function _exit(
         address vault,
         ERC4626 xPYT,
-        uint8 underlyingDecimals,
         uint256 underlyingAmount,
         uint256 updatedPricePerVaultShare
     ) internal virtual {
@@ -1029,13 +999,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(
-            vault,
-            pyt,
-            msg.sender,
-            underlyingDecimals,
-            updatedPricePerVaultShare
-        );
+        _accrueYield(vault, pyt, msg.sender, updatedPricePerVaultShare);
 
         // burn NYTs and PYTs
         unchecked {
@@ -1059,11 +1023,11 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     }
 
     /// @dev Updates storage variables for when a PYT holder claims the accrued yield.
-    function _claimYield(
-        address vault,
-        uint8 underlyingDecimals,
-        uint256 updatedPricePerVaultShare
-    ) internal virtual returns (uint256 yieldAmount) {
+    function _claimYield(address vault, uint256 updatedPricePerVaultShare)
+        internal
+        virtual
+        returns (uint256 yieldAmount)
+    {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -1080,8 +1044,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         // accrue yield
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
-            updatedPricePerVaultShare,
-            underlyingDecimals
+            updatedPricePerVaultShare
         );
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][
             msg.sender
@@ -1144,7 +1107,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// @param recipient The recipient of the underlying tokens
     /// @param vault The vault to withdraw from
     /// @param underlyingAmount The amount of tokens to withdraw
-    /// @param underlyingDecimals The number of decimals used by the underlying token
     /// @param pricePerVaultShare The latest price per vault share value
     /// @param checkBalance Set to true to withdraw the entire balance if we're trying
     /// to withdraw more than the balance (due to rounding errors)
@@ -1153,44 +1115,28 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address recipient,
         address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals,
         uint256 pricePerVaultShare,
         bool checkBalance
     ) internal virtual returns (uint256 withdrawnUnderlyingAmount);
 
     /// @dev Converts a vault share amount into an equivalent underlying asset amount
     function _vaultSharesAmountToUnderlyingAmount(
+        address vault,
         uint256 vaultSharesAmount,
-        uint8 underlyingDecimals,
         uint256 pricePerVaultShare
-    ) internal pure virtual returns (uint256) {
-        return
-            FullMath.mulDiv(
-                vaultSharesAmount,
-                pricePerVaultShare,
-                10**underlyingDecimals
-            );
-    }
+    ) internal view virtual returns (uint256);
 
     /// @dev Converts an underlying asset amount into an equivalent vault shares amount
     function _underlyingAmountToVaultSharesAmount(
+        address vault,
         uint256 underlyingAmount,
-        uint8 underlyingDecimals,
         uint256 pricePerVaultShare
-    ) internal pure virtual returns (uint256) {
-        return
-            FullMath.mulDiv(
-                underlyingAmount,
-                10**underlyingDecimals,
-                pricePerVaultShare
-            );
-    }
+    ) internal view virtual returns (uint256);
 
     /// @dev Computes the latest yieldPerToken value for a vault.
     function _computeYieldPerToken(
         address vault,
-        uint256 updatedPricePerVaultShare,
-        uint8 underlyingDecimals
+        uint256 updatedPricePerVaultShare
     ) internal view virtual returns (uint256) {
         uint256 pytTotalSupply = yieldTokenTotalSupply[vault];
         if (pytTotalSupply == 0) {
@@ -1201,18 +1147,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             // rounding error in vault share or no yield accrued
             return yieldPerTokenStored[vault];
         }
-        uint256 underlyingPrecision = 10**underlyingDecimals;
-        uint256 newYieldAccrued;
+        uint256 newYieldPerTokenAccrued;
         unchecked {
             // can't underflow since we know updatedPricePerVaultShare > pricePerVaultShareStored_
-            newYieldAccrued = FullMath.mulDiv(
+            newYieldPerTokenAccrued = FullMath.mulDiv(
                 updatedPricePerVaultShare - pricePerVaultShareStored_,
                 getVaultShareBalance(vault),
-                underlyingPrecision
+                pytTotalSupply
             );
         }
-        return
-            yieldPerTokenStored[vault] +
-            FullMath.mulDiv(newYieldAccrued, PRECISION, pytTotalSupply);
+        return yieldPerTokenStored[vault] + newYieldPerTokenAccrued;
     }
 }

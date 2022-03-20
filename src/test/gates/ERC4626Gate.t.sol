@@ -2,16 +2,17 @@
 pragma solidity ^0.8.4;
 
 import {ERC20} from "solmate/tokens/ERC20.sol";
+import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
 import {Gate} from "../../Gate.sol";
 import {FullMath} from "../../lib/FullMath.sol";
-import {YearnGate} from "../../gates/YearnGate.sol";
+import {ERC4626Gate} from "../../gates/ERC4626Gate.sol";
 import {BaseGateTest} from "../base/BaseGateTest.sol";
-import {TestYearnVault} from "../mocks/TestYearnVault.sol";
+import {TestERC4626} from "../mocks/TestERC4626.sol";
 
-contract YearnGateTest is BaseGateTest {
+contract ERC4626GateTest is BaseGateTest {
     function _deployGate() internal virtual override returns (Gate gate_) {
-        return new YearnGate(factory);
+        return new ERC4626Gate(factory);
     }
 
     function _deployVault(ERC20 underlying)
@@ -20,7 +21,7 @@ contract YearnGateTest is BaseGateTest {
         override
         returns (address vault)
     {
-        return address(new TestYearnVault(underlying));
+        return address(new TestERC4626(underlying));
     }
 
     function _depositInVault(address vault, uint256 underlyingAmount)
@@ -29,7 +30,8 @@ contract YearnGateTest is BaseGateTest {
         override
         returns (uint256)
     {
-        return TestYearnVault(vault).deposit(underlyingAmount);
+        if (underlyingAmount == 0) return 0;
+        return TestERC4626(vault).deposit(underlyingAmount, address(this));
     }
 
     function _getExpectedNYTName()
@@ -38,7 +40,7 @@ contract YearnGateTest is BaseGateTest {
         override
         returns (string memory)
     {
-        return "Timeless TestYearnVault Negative Yield Token";
+        return "Timeless TestERC4626 Negative Yield Token";
     }
 
     function _getExpectedNYTSymbol()
@@ -47,7 +49,7 @@ contract YearnGateTest is BaseGateTest {
         override
         returns (string memory)
     {
-        return unicode"∞-yTEST-NYT";
+        return unicode"∞-TEST-ERC4626-NYT";
     }
 
     function _getExpectedPYTName()
@@ -56,7 +58,7 @@ contract YearnGateTest is BaseGateTest {
         override
         returns (string memory)
     {
-        return "Timeless TestYearnVault Perpetual Yield Token";
+        return "Timeless TestERC4626 Perpetual Yield Token";
     }
 
     function _getExpectedPYTSymbol()
@@ -65,30 +67,20 @@ contract YearnGateTest is BaseGateTest {
         override
         returns (string memory)
     {
-        return unicode"∞-yTEST-PYT";
+        return unicode"∞-TEST-ERC4626-PYT";
     }
 
     function _vaultSharesAmountToUnderlyingAmount(
         address vault,
         uint256 vaultSharesAmount
     ) internal view virtual override returns (uint256) {
-        return
-            FullMath.mulDiv(
-                vaultSharesAmount,
-                gate.getPricePerVaultShare(vault),
-                PRECISION
-            );
+        return ERC4626(vault).convertToAssets(vaultSharesAmount);
     }
 
     function _underlyingAmountToVaultSharesAmount(
         address vault,
         uint256 underlyingAmount
     ) internal view virtual override returns (uint256) {
-        return
-            FullMath.mulDiv(
-                underlyingAmount,
-                PRECISION,
-                gate.getPricePerVaultShare(vault)
-            );
+        return ERC4626(vault).convertToShares(underlyingAmount);
     }
 }
