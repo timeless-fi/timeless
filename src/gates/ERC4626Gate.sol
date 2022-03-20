@@ -49,8 +49,7 @@ contract ERC4626Gate is ERC20Gate {
         override
         returns (uint256)
     {
-        ERC4626 erc4626Vault = ERC4626(vault);
-        return erc4626Vault.convertToAssets(10**erc4626Vault.decimals());
+        return ERC4626(vault).convertToAssets(PRECISION);
     }
 
     /// -----------------------------------------------------------------------
@@ -78,6 +77,7 @@ contract ERC4626Gate is ERC20Gate {
         uint256, /*pricePerVaultShare*/
         bool checkBalance
     ) internal virtual override returns (uint256 withdrawnUnderlyingAmount) {
+        checkBalance = true;
         if (checkBalance) {
             uint256 maxWithdrawAmount = ERC4626(vault).maxWithdraw(
                 address(this)

@@ -132,8 +132,6 @@ abstract contract BaseGateTest is BaseTest {
     ) public {
         if (!gate.vaultSharesIsERC20()) return;
 
-        vm.startPrank(tester);
-
         // preprocess arguments
         (
             underlyingDecimals,
@@ -159,7 +157,7 @@ abstract contract BaseGateTest is BaseTest {
             : XPYT_NULL;
 
         // mint underlying and enter vault
-        underlying.mint(tester, underlyingAmount);
+        underlying.mint(address(this), underlyingAmount);
         uint256 vaultSharesAmount = _depositInVault(vault, underlyingAmount);
         // due to the precision limitations of the vault, we might've lost some underlying
         underlyingAmount = uint120(
@@ -168,22 +166,31 @@ abstract contract BaseGateTest is BaseTest {
 
         // enter
         ERC20(vault).approve(address(gate), type(uint256).max);
-        uint256 mintAmount = gate.enterWithVaultShares(
-            nytRecipient,
-            pytRecipient,
-            vault,
-            xPYT,
-            vaultSharesAmount
-        );
+        uint256 mintAmount;
+        {
+            uint256 beforeBalance = ERC20(vault).balanceOf(address(this));
+            mintAmount = gate.enterWithVaultShares(
+                nytRecipient,
+                pytRecipient,
+                vault,
+                xPYT,
+                vaultSharesAmount
+            );
 
-        // check balances
-        // vault shares transferred from tester to gate
-        assertEqDecimal(ERC20(vault).balanceOf(tester), 0, underlyingDecimals);
-        assertEqDecimal(
-            ERC20(vault).balanceOf(address(gate)),
-            vaultSharesAmount,
-            underlyingDecimals
-        );
+            // check balances
+            // vault shares transferred from tester to gate
+            assertEqDecimal(
+                beforeBalance - ERC20(vault).balanceOf(address(this)),
+                vaultSharesAmount,
+                underlyingDecimals
+            );
+            assertEqDecimal(
+                ERC20(vault).balanceOf(address(gate)),
+                vaultSharesAmount,
+                underlyingDecimals
+            );
+        }
+
         // recipient received NYT and PYT
         NegativeYieldToken nyt = gate.getNegativeYieldTokenForVault(vault);
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
