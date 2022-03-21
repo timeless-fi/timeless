@@ -140,6 +140,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
     /// @notice The amount of yield a user has accrued, at the time when they last interacted
     /// with the gate/PYT (without calling claimYieldInUnderlying()).
+    /// Shifted by 1, so e.g. 3 represents 2, 10 represents 9.
     /// @dev vault => user => value
     mapping(address => mapping(address => uint256)) public userAccruedYield;
 
@@ -876,13 +877,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
         // we know the from account must have held PYTs before
         // so we will always accrue the yield earned by the from account
-        userAccruedYield[vault][from] = _getClaimableYieldAmount(
-            vault,
-            from,
-            updatedYieldPerToken,
-            userYieldPerTokenStored[vault][from],
-            fromBalance
-        );
+        userAccruedYield[vault][from] =
+            _getClaimableYieldAmount(
+                vault,
+                from,
+                updatedYieldPerToken,
+                userYieldPerTokenStored[vault][from],
+                fromBalance
+            ) +
+            1;
         userYieldPerTokenStored[vault][from] = updatedYieldPerToken + 1;
 
         // the to account might not have held PYTs before
@@ -890,13 +893,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         uint256 toUserYieldPerTokenStored = userYieldPerTokenStored[vault][to];
         if (toUserYieldPerTokenStored != 0) {
             // to account has held PYTs before
-            userAccruedYield[vault][to] = _getClaimableYieldAmount(
-                vault,
-                to,
-                updatedYieldPerToken,
-                toUserYieldPerTokenStored,
-                toBalance
-            );
+            userAccruedYield[vault][to] =
+                _getClaimableYieldAmount(
+                    vault,
+                    to,
+                    updatedYieldPerToken,
+                    toUserYieldPerTokenStored,
+                    toBalance
+                ) +
+                1;
         }
         userYieldPerTokenStored[vault][to] = updatedYieldPerToken + 1;
     }
@@ -918,13 +923,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         );
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
         if (userYieldPerTokenStored_ != 0) {
-            userAccruedYield[vault][user] = _getClaimableYieldAmount(
-                vault,
-                user,
-                updatedYieldPerToken,
-                userYieldPerTokenStored_,
-                pyt.balanceOf(user)
-            );
+            userAccruedYield[vault][user] =
+                _getClaimableYieldAmount(
+                    vault,
+                    user,
+                    updatedYieldPerToken,
+                    userYieldPerTokenStored_,
+                    pyt.balanceOf(user)
+                ) +
+                1;
         }
         yieldPerTokenStored[vault] = updatedYieldPerToken;
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
@@ -1062,7 +1069,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         pricePerVaultShareStored[vault] = updatedPricePerVaultShare;
         userYieldPerTokenStored[vault][msg.sender] = updatedYieldPerToken + 1;
         if (yieldAmount != 0) {
-            userAccruedYield[vault][msg.sender] = 0;
+            userAccruedYield[vault][msg.sender] = 1;
         }
     }
 
@@ -1074,22 +1081,27 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         uint256 updatedYieldPerToken,
         uint256 userYieldPerTokenStored_,
         uint256 userPYTBalance
-    ) internal view virtual returns (uint256) {
+    ) internal view virtual returns (uint256 yieldAmount) {
         unchecked {
             // the stored value is shifted by one
             uint256 actualUserYieldPerToken = userYieldPerTokenStored_ - 1;
 
             // updatedYieldPerToken - actualUserYieldPerToken won't underflow since we check updatedYieldPerToken > actualUserYieldPerToken
-            // + userAccruedYield[vault][user] won't overflow since the sum is at most the totalSupply of the vault's underlying, which
-            // is at most 256 bits.
-            return
-                FullMath.mulDiv(
-                    userPYTBalance,
-                    updatedYieldPerToken > actualUserYieldPerToken
-                        ? updatedYieldPerToken - actualUserYieldPerToken
-                        : 0,
-                    PRECISION
-                ) + userAccruedYield[vault][user];
+            yieldAmount = FullMath.mulDiv(
+                userPYTBalance,
+                updatedYieldPerToken > actualUserYieldPerToken
+                    ? updatedYieldPerToken - actualUserYieldPerToken
+                    : 0,
+                PRECISION
+            );
+
+            uint256 accruedYield = userAccruedYield[vault][user];
+            if (accruedYield > 1) {
+                // won't overflow since the sum is at most the totalSupply of the vault's underlying, which
+                // is at most 256 bits.
+                // the stored accruedYield value is shifted by one
+                yieldAmount += accruedYield - 1;
+            }
         }
     }
 
