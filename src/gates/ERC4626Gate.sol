@@ -62,9 +62,14 @@ contract ERC4626Gate is ERC20Gate {
         uint256 underlyingAmount,
         address vault
     ) internal virtual override {
-        if (underlying.allowance(address(this), vault) < underlyingAmount) {
-            underlying.safeApprove(vault, type(uint256).max);
+        if (underlying.allowance(address(this), vault) != 0) {
+            // reset allowance to support tokens like USDT
+            // that only allow non-zero approval if the current
+            // allowance is zero
+            underlying.safeApprove(vault, 0);
         }
+        // we don't do infinite approval because vault is not trusted
+        underlying.safeApprove(vault, underlyingAmount);
 
         ERC4626(vault).deposit(underlyingAmount, address(this));
     }
@@ -77,7 +82,6 @@ contract ERC4626Gate is ERC20Gate {
         uint256, /*pricePerVaultShare*/
         bool checkBalance
     ) internal virtual override returns (uint256 withdrawnUnderlyingAmount) {
-        checkBalance = true;
         if (checkBalance) {
             uint256 sharesBalance = ERC4626(vault).balanceOf(address(this));
             uint256 sharesRequired = ERC4626(vault).previewWithdraw(

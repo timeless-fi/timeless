@@ -31,6 +31,8 @@ abstract contract BaseGateTest is BaseTest {
     uint256 internal constant PROTOCOL_FEE = 100; // 10%
     ERC4626 internal constant XPYT_NULL = ERC4626(address(0));
     uint256 internal constant PRECISION = 10**27;
+    bytes internal constant arithmeticError =
+        abi.encodeWithSignature("Panic(uint256)", 0x11);
 
     /// -----------------------------------------------------------------------
     /// Setup
@@ -272,12 +274,26 @@ abstract contract BaseGateTest is BaseTest {
         if (useXPYT) {
             xPYT.approve(address(gate), type(uint256).max);
         }
-        uint256 burnAmount = gate.exitToUnderlying(
-            recipient,
-            vault,
-            xPYT,
-            underlyingAmount
-        );
+        uint256 burnAmount;
+        {
+            bool shouldExpectWithdrawRevert = _shouldExpectExitToUnderlyingRevert(
+                    vault,
+                    underlyingAmount
+                );
+            if (shouldExpectWithdrawRevert) {
+                vm.expectRevert(arithmeticError);
+            }
+            burnAmount = gate.exitToUnderlying(
+                recipient,
+                vault,
+                xPYT,
+                underlyingAmount
+            );
+            if (shouldExpectWithdrawRevert) {
+                // remaining assertions are pointless
+                return;
+            }
+        }
 
         // check balances
         uint256 epsilonInv = 10**underlyingDecimals;
@@ -372,12 +388,26 @@ abstract contract BaseGateTest is BaseTest {
             vault,
             underlyingAmount
         );
-        uint256 burnAmount = gate.exitToVaultShares(
-            recipient,
-            vault,
-            xPYT,
-            vaultSharesAmount
-        );
+        uint256 burnAmount;
+        {
+            bool shouldExpectWithdrawRevert = _shouldExpectExitToVaultSharesRevert(
+                    vault,
+                    vaultSharesAmount
+                );
+            if (shouldExpectWithdrawRevert) {
+                vm.expectRevert(arithmeticError);
+            }
+            burnAmount = gate.exitToVaultShares(
+                recipient,
+                vault,
+                xPYT,
+                vaultSharesAmount
+            );
+            if (shouldExpectWithdrawRevert) {
+                // remaining assertions are pointless
+                return;
+            }
+        }
 
         // check balances
         uint256 epsilonInv = min(10**(underlyingDecimals - 2), 10**6);
@@ -1358,4 +1388,14 @@ abstract contract BaseGateTest is BaseTest {
         address vault,
         uint256 underlyingAmount
     ) internal view virtual returns (uint256);
+
+    function _shouldExpectExitToUnderlyingRevert(
+        address vault,
+        uint256 underlyingAmount
+    ) internal virtual returns (bool);
+
+    function _shouldExpectExitToVaultSharesRevert(
+        address vault,
+        uint256 vaultSharesAmount
+    ) internal virtual returns (bool);
 }

@@ -91,4 +91,21 @@ contract YearnGateTest is BaseGateTest {
                 gate.getPricePerVaultShare(vault)
             );
     }
+
+    function _shouldExpectExitToUnderlyingRevert(
+        address vault,
+        uint256 underlyingAmount
+    ) internal virtual override returns (bool) {
+        return
+            TestYearnVault(vault).balanceOf(address(gate)) <
+            _underlyingAmountToVaultSharesAmount(vault, underlyingAmount);
+    }
+
+    function _shouldExpectExitToVaultSharesRevert(
+        address vault,
+        uint256 vaultSharesAmount
+    ) internal virtual override returns (bool) {
+        return
+            TestYearnVault(vault).balanceOf(address(gate)) < vaultSharesAmount;
+    }
 }

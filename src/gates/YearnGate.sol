@@ -65,9 +65,14 @@ contract YearnGate is ERC20Gate {
         uint256 underlyingAmount,
         address vault
     ) internal virtual override {
-        if (underlying.allowance(address(this), vault) < underlyingAmount) {
-            underlying.safeApprove(vault, type(uint256).max);
+        if (underlying.allowance(address(this), vault) != 0) {
+            // reset allowance to support tokens like USDT
+            // that only allow non-zero approval if the current
+            // allowance is zero
+            underlying.safeApprove(vault, 0);
         }
+        // we don't do infinite approval because vault is not trusted
+        underlying.safeApprove(vault, underlyingAmount);
 
         YearnVault(vault).deposit(underlyingAmount);
     }

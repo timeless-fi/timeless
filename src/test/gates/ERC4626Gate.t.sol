@@ -83,4 +83,20 @@ contract ERC4626GateTest is BaseGateTest {
     ) internal view virtual override returns (uint256) {
         return ERC4626(vault).convertToShares(underlyingAmount);
     }
+
+    function _shouldExpectExitToUnderlyingRevert(
+        address vault,
+        uint256 underlyingAmount
+    ) internal virtual override returns (bool) {
+        return
+            ERC4626(vault).balanceOf(address(gate)) <
+            ERC4626(vault).previewWithdraw(underlyingAmount);
+    }
+
+    function _shouldExpectExitToVaultSharesRevert(
+        address vault,
+        uint256 vaultSharesAmount
+    ) internal virtual override returns (bool) {
+        return ERC4626(vault).balanceOf(address(gate)) < vaultSharesAmount;
+    }
 }
