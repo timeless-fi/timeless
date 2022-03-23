@@ -79,13 +79,14 @@ contract ERC4626Gate is ERC20Gate {
     ) internal virtual override returns (uint256 withdrawnUnderlyingAmount) {
         checkBalance = true;
         if (checkBalance) {
-            uint256 maxWithdrawAmount = ERC4626(vault).maxWithdraw(
-                address(this)
+            uint256 sharesBalance = ERC4626(vault).balanceOf(address(this));
+            uint256 sharesRequired = ERC4626(vault).previewWithdraw(
+                underlyingAmount
             );
-            if (underlyingAmount > maxWithdrawAmount) {
+            if (sharesRequired > sharesBalance) {
                 return
-                    ERC4626(vault).withdraw(
-                        maxWithdrawAmount,
+                    ERC4626(vault).redeem(
+                        sharesBalance,
                         recipient,
                         address(this)
                     );
