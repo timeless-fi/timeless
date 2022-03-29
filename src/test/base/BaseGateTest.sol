@@ -4,6 +4,7 @@ pragma solidity ^0.8.4;
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 
+import {Echo} from "../utils/Echo.sol";
 import {BaseTest, console} from "../base/BaseTest.sol";
 
 import {Gate} from "../../Gate.sol";
@@ -21,6 +22,7 @@ abstract contract BaseGateTest is BaseTest {
 
     Factory internal factory;
     Gate internal gate;
+    Echo internal echo;
     address internal constant tester = address(0x69);
     address internal constant tester1 = address(0xabcd);
     address internal constant recipient = address(0xbeef);
@@ -35,6 +37,16 @@ abstract contract BaseGateTest is BaseTest {
         abi.encodeWithSignature("Panic(uint256)", 0x11);
 
     /// -----------------------------------------------------------------------
+    /// Modifiers
+    /// -----------------------------------------------------------------------
+
+    modifier prankAsTester() {
+        vm.startPrank(tester);
+        _;
+        vm.stopPrank();
+    }
+
+    /// -----------------------------------------------------------------------
     /// Setup
     /// -----------------------------------------------------------------------
 
@@ -47,6 +59,7 @@ abstract contract BaseGateTest is BaseTest {
             })
         );
         gate = _deployGate();
+        echo = new Echo();
     }
 
     /// -----------------------------------------------------------------------
@@ -59,9 +72,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 initialYieldAmount,
         uint120 underlyingAmount,
         bool useXPYT
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -132,7 +143,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 underlyingAmount,
         bool useXPYT
     ) public {
-        if (!gate.vaultSharesIsERC20()) return;
+        vm.assume(gate.vaultSharesIsERC20());
 
         // preprocess arguments
         (
@@ -226,9 +237,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 additionalYieldAmount,
         uint120 underlyingAmount,
         bool useXPYT
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -334,10 +343,8 @@ abstract contract BaseGateTest is BaseTest {
         uint120 additionalYieldAmount,
         uint120 underlyingAmount,
         bool useXPYT
-    ) public {
-        if (!gate.vaultSharesIsERC20()) return;
-
-        vm.startPrank(tester);
+    ) public prankAsTester {
+        vm.assume(gate.vaultSharesIsERC20());
 
         // preprocess arguments
         (
@@ -477,9 +484,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 initialYieldAmount,
         uint120 additionalYieldAmount,
         uint120 underlyingAmount
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -582,10 +587,8 @@ abstract contract BaseGateTest is BaseTest {
         uint120 initialYieldAmount,
         uint120 additionalYieldAmount,
         uint120 underlyingAmount
-    ) public {
-        if (!gate.vaultSharesIsERC20()) return;
-
-        vm.startPrank(tester);
+    ) public prankAsTester {
+        vm.assume(gate.vaultSharesIsERC20());
 
         // preprocess arguments
         (
@@ -679,9 +682,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 additionalYieldAmount,
         uint120 underlyingAmount,
         bool useXPYT
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -801,9 +802,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 additionalYieldAmount,
         uint120 underlyingAmount,
         uint8 pytTransferPercent
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -880,9 +879,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 additionalYieldAmount,
         uint120 underlyingAmount,
         uint8 pytTransferPercent
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -999,9 +996,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 additionalYieldAmount,
         uint120 underlyingAmount,
         uint8 pytTransferPercent
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -1054,6 +1049,7 @@ abstract contract BaseGateTest is BaseTest {
         pyt.approve(tester1, type(uint256).max);
 
         // transfer PYT from tester to tester1, as tester1
+        vm.stopPrank();
         vm.prank(tester1);
         pyt.transferFrom(
             tester,
@@ -1062,6 +1058,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // claim yield as tester
+        vm.startPrank(tester);
         uint256 testerClaimedYield = gate.claimYieldInUnderlying(
             recipient,
             vault
@@ -1084,9 +1081,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 additionalYieldAmount,
         uint120 underlyingAmount,
         uint8 pytTransferPercent
-    ) public {
-        vm.startPrank(tester);
-
+    ) public prankAsTester {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -1157,6 +1152,7 @@ abstract contract BaseGateTest is BaseTest {
         pyt.approve(tester1, type(uint256).max);
 
         // transfer PYT from tester to tester1, as tester1
+        vm.stopPrank();
         vm.prank(tester1);
         pyt.transferFrom(
             tester,
@@ -1165,6 +1161,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // claim yield as tester
+        vm.startPrank(tester);
         uint256 testerClaimedYield;
         {
             uint256 beforeClaimPricePerVaultShare = gate.getPricePerVaultShare(
@@ -1232,8 +1229,7 @@ abstract contract BaseGateTest is BaseTest {
 
     function testFail_cannotSetProtocolFeeAsRando(
         Factory.ProtocolFeeInfo memory protocolFeeInfo_
-    ) public {
-        vm.startPrank(tester);
+    ) public prankAsTester {
         factory.ownerSetProtocolFee(protocolFeeInfo_);
     }
 
@@ -1270,6 +1266,8 @@ abstract contract BaseGateTest is BaseTest {
         uint256 initialUnderlyingAmount,
         uint256 initialYieldAmount
     ) internal returns (TestERC20 underlying, address vault) {
+        address prankster = echo.echo();
+
         // setup contracts
         underlying = new TestERC20(underlyingDecimals);
         vault = _deployVault(underlying);
@@ -1279,10 +1277,12 @@ abstract contract BaseGateTest is BaseTest {
 
         // initialize deposits & yield
         underlying.mint(initialDepositor, initialUnderlyingAmount);
-        vm.prank(initialDepositor);
+        vm.stopPrank();
+        vm.startPrank(initialDepositor);
         underlying.approve(vault, type(uint256).max);
-        vm.prank(initialDepositor);
         _depositInVault(vault, initialUnderlyingAmount);
+        vm.stopPrank();
+        vm.startPrank(prankster);
         underlying.mint(vault, initialYieldAmount);
     }
 
