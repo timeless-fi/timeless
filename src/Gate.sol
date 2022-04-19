@@ -962,7 +962,12 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, pytRecipient, updatedPricePerVaultShare);
+        _accrueYield(
+            vault,
+            pyt,
+            address(xPYT) == address(0) ? pytRecipient : address(xPYT),
+            updatedPricePerVaultShare
+        );
 
         // mint NYTs and PYTs
         yieldTokenTotalSupply[vault] += underlyingAmount;
