@@ -1,0 +1,5 @@
+{
+  "TestERC20": "0x4c253629ed53fda3ff6aad90f9e3db1a22aafee8",
+  "TestERC4626": "0xc2e703eea20871b6394057d310ca5aa612a903d5",
+  "TestYearnVault": "0x0f17c89ae8edf5f8ad78d4af5518dc238bb62624"
+}
