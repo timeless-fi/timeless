@@ -9,9 +9,10 @@ import {BaseTest, console} from "../base/BaseTest.sol";
 
 import {Gate} from "../../Gate.sol";
 import {Factory} from "../../Factory.sol";
+import {IxPYT} from "../../external/IxPYT.sol";
+import {TestXPYT} from "../mocks/TestXPYT.sol";
 import {FullMath} from "../../lib/FullMath.sol";
 import {TestERC20} from "../mocks/TestERC20.sol";
-import {TestERC4626} from "../mocks/TestERC4626.sol";
 import {NegativeYieldToken} from "../../NegativeYieldToken.sol";
 import {PerpetualYieldToken} from "../../PerpetualYieldToken.sol";
 
@@ -31,7 +32,7 @@ abstract contract BaseGateTest is BaseTest {
     address internal constant initialDepositor = address(0x420);
     address internal constant protocolFeeRecipient = address(0x6969);
     uint256 internal constant PROTOCOL_FEE = 100; // 10%
-    ERC4626 internal constant XPYT_NULL = ERC4626(address(0));
+    IxPYT internal constant XPYT_NULL = IxPYT(address(0));
     uint256 internal constant PRECISION = 10**27;
     bytes internal constant arithmeticError =
         abi.encodeWithSignature("Panic(uint256)", 0x11);
@@ -91,8 +92,8 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
-        ERC4626 xPYT = useXPYT
-            ? new TestERC4626(
+        IxPYT xPYT = useXPYT
+            ? new TestXPYT(
                 ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
             )
             : XPYT_NULL;
@@ -163,8 +164,8 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
-        ERC4626 xPYT = useXPYT
-            ? new TestERC4626(
+        IxPYT xPYT = useXPYT
+            ? new TestXPYT(
                 ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
             )
             : XPYT_NULL;
@@ -256,8 +257,8 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
-        ERC4626 xPYT = useXPYT
-            ? new TestERC4626(
+        IxPYT xPYT = useXPYT
+            ? new TestXPYT(
                 ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
             )
             : XPYT_NULL;
@@ -364,8 +365,8 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
-        ERC4626 xPYT = useXPYT
-            ? new TestERC4626(
+        IxPYT xPYT = useXPYT
+            ? new TestXPYT(
                 ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
             )
             : XPYT_NULL;
@@ -702,8 +703,8 @@ abstract contract BaseGateTest is BaseTest {
             initialUnderlyingAmount,
             initialYieldAmount
         );
-        ERC4626 xPYT = useXPYT
-            ? new TestERC4626(
+        IxPYT xPYT = useXPYT
+            ? new TestXPYT(
                 ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
             )
             : XPYT_NULL;

@@ -7,6 +7,7 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
 
 import {Factory} from "./Factory.sol";
+import {IxPYT} from "./external/IxPYT.sol";
 import {FullMath} from "./lib/FullMath.sol";
 import {Multicall} from "./lib/Multicall.sol";
 import {SelfPermit} from "./lib/SelfPermit.sol";
@@ -55,7 +56,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address indexed nytRecipient,
         address indexed pytRecipient,
         address indexed vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 underlyingAmount
     );
     event EnterWithVaultShares(
@@ -63,21 +64,21 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address indexed nytRecipient,
         address indexed pytRecipient,
         address indexed vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 vaultSharesAmount
     );
     event ExitToUnderlying(
         address indexed sender,
         address indexed recipient,
         address indexed vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 underlyingAmount
     );
     event ExitToVaultShares(
         address indexed sender,
         address indexed recipient,
         address indexed vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 vaultSharesAmount
     );
     event ClaimYieldInUnderlying(
@@ -97,7 +98,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address indexed nytRecipient,
         address indexed pytRecipient,
         address indexed vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 amount
     );
 
@@ -177,7 +178,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address nytRecipient,
         address pytRecipient,
         address vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 underlyingAmount
     ) external virtual nonReentrant returns (uint256 mintAmount) {
         /// -----------------------------------------------------------------------
@@ -238,7 +239,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address nytRecipient,
         address pytRecipient,
         address vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 vaultSharesAmount
     ) external virtual nonReentrant returns (uint256 mintAmount) {
         /// -----------------------------------------------------------------------
@@ -304,7 +305,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     function exitToUnderlying(
         address recipient,
         address vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 underlyingAmount
     ) external virtual nonReentrant returns (uint256 burnAmount) {
         /// -----------------------------------------------------------------------
@@ -357,7 +358,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     function exitToVaultShares(
         address recipient,
         address vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 vaultSharesAmount
     ) external virtual nonReentrant returns (uint256 burnAmount) {
         /// -----------------------------------------------------------------------
@@ -590,7 +591,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address nytRecipient,
         address pytRecipient,
         address vault,
-        ERC4626 xPYT
+        IxPYT xPYT
     ) external virtual nonReentrant returns (uint256 yieldAmount) {
         // update storage variables and compute yield amount
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
@@ -943,7 +944,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         address nytRecipient,
         address pytRecipient,
         address vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 underlyingAmount,
         uint256 updatedPricePerVaultShare
     ) internal virtual {
@@ -970,28 +971,22 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             // mint raw PYT to recipient
             pyt.gateMint(pytRecipient, underlyingAmount);
         } else {
-            // mint PYT and wrap in xPYT
-            pyt.gateMint(address(this), underlyingAmount);
-
-            if (
-                pyt.allowance(address(this), address(xPYT)) < underlyingAmount
-            ) {
-                // set PYT approval
-                pyt.approve(address(xPYT), type(uint256).max);
-            }
+            // mint PYT to xPYT contract
+            pyt.gateMint(address(xPYT), underlyingAmount);
 
             /// -----------------------------------------------------------------------
             /// Effects
             /// -----------------------------------------------------------------------
 
-            xPYT.deposit(underlyingAmount, pytRecipient);
+            // call sweep to mint xPYT using the PYT
+            xPYT.sweep(pytRecipient);
         }
     }
 
     /// @dev Burns PYTs and NYTs from msg.sender given the amount of underlying withdrawn.
     function _exit(
         address vault,
-        ERC4626 xPYT,
+        IxPYT xPYT,
         uint256 underlyingAmount,
         uint256 updatedPricePerVaultShare
     ) internal virtual {
