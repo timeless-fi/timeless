@@ -72,6 +72,11 @@ contract ERC4626Gate is ERC20Gate {
         underlying.safeApprove(vault, underlyingAmount);
 
         ERC4626(vault).deposit(underlyingAmount, address(this));
+
+        if (underlying.allowance(address(this), vault) != 0) {
+            // clear any outstanding allowances to prevent unknown attack vectors
+            underlying.safeApprove(vault, 0);
+        }
     }
 
     /// @inheritdoc Gate
