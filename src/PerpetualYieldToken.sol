@@ -45,12 +45,16 @@ contract PerpetualYieldToken is BaseERC20 {
         );
 
         // do transfer
-        balanceOf[msg.sender] = fromBalance - amount;
+        // skip during self transfers since toBalance is cached
+        // which leads to free minting, a critical issue
+        if (msg.sender != to) {
+            balanceOf[msg.sender] = fromBalance - amount;
 
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to] = toBalance + amount;
+            // Cannot overflow because the sum of all user
+            // balances can't exceed the max uint256 value.
+            unchecked {
+                balanceOf[to] = toBalance + amount;
+            }
         }
 
         emit Transfer(msg.sender, to, amount);
@@ -83,12 +87,16 @@ contract PerpetualYieldToken is BaseERC20 {
             allowance[from][msg.sender] = allowed - amount;
 
         // do transfer
-        balanceOf[from] = fromBalance - amount;
+        // skip during self transfers since toBalance is cached
+        // which leads to free minting, a critical issue
+        if (msg.sender != to) {
+            balanceOf[from] = fromBalance - amount;
 
-        // Cannot overflow because the sum of all user
-        // balances can't exceed the max uint256 value.
-        unchecked {
-            balanceOf[to] = toBalance + amount;
+            // Cannot overflow because the sum of all user
+            // balances can't exceed the max uint256 value.
+            unchecked {
+                balanceOf[to] = toBalance + amount;
+            }
         }
 
         emit Transfer(from, to, amount);
