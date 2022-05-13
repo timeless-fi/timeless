@@ -649,14 +649,24 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
             PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
 
-            // accrue yield to recipient
-            // no need to do it if the recipient is msg.sender, since
-            // we already accrued yield in _claimYield
-            if (pytRecipient != msg.sender) {
+            if (address(xPYT) == address(0)) {
+                // accrue yield to pytRecipient if they're not msg.sender
+                // no need to do it if the recipient is msg.sender, since
+                // we already accrued yield in _claimYield
+                if (pytRecipient != msg.sender) {
+                    _accrueYield(
+                        vault,
+                        pyt,
+                        pytRecipient,
+                        updatedPricePerVaultShare
+                    );
+                }
+            } else {
+                // accrue yield to xPYT contract since it gets minted PYT
                 _accrueYield(
                     vault,
                     pyt,
-                    pytRecipient,
+                    address(xPYT),
                     updatedPricePerVaultShare
                 );
             }
@@ -668,13 +678,15 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
                 // mint raw PYT to recipient
                 pyt.gateMint(pytRecipient, yieldAmount);
             } else {
-                // mint PYT and wrap in xPYT
-                pyt.gateMint(address(this), yieldAmount);
-                if (pyt.allowance(address(this), address(xPYT)) < yieldAmount) {
-                    // set PYT approval
-                    pyt.approve(address(xPYT), type(uint256).max);
-                }
-                xPYT.deposit(yieldAmount, pytRecipient);
+                // mint PYT to xPYT contract
+                pyt.gateMint(address(xPYT), yieldAmount);
+
+                /// -----------------------------------------------------------------------
+                /// Effects
+                /// -----------------------------------------------------------------------
+
+                // call sweep to mint xPYT using the PYT
+                xPYT.sweep(pytRecipient);
             }
 
             emit ClaimYieldAndEnter(
