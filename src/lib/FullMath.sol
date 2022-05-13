@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 /// @title Contains 512-bit math functions
 /// @notice Facilitates multiplication and division that can have overflow of an intermediate value without any loss of precision
@@ -62,7 +62,7 @@ library FullMath {
             // Factor powers of two out of denominator
             // Compute largest power of two divisor of denominator.
             // Always >= 1.
-            uint256 twos = (type(uint256).max - denominator + 1) & denominator;
+            uint256 twos = (0 - denominator) & denominator;
             // Divide denominator by power of two
             assembly {
                 denominator := div(denominator, twos)
@@ -117,8 +117,8 @@ library FullMath {
         uint256 b,
         uint256 denominator
     ) internal pure returns (uint256 result) {
-        result = mulDiv(a, b, denominator);
         unchecked {
+            result = mulDiv(a, b, denominator);
             if (mulmod(a, b, denominator) > 0) {
                 require(result < type(uint256).max);
                 result++;
