@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.4;
 
+import {BoringOwnable} from "boringsolidity/BoringOwnable.sol";
+
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
 import {Gate} from "./Gate.sol";
-import {Ownable} from "./lib/Ownable.sol";
 import {NegativeYieldToken} from "./NegativeYieldToken.sol";
 import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 
-contract Factory is Ownable {
+contract Factory is BoringOwnable {
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
@@ -49,9 +50,7 @@ contract Factory is Ownable {
     /// Constructor
     /// -----------------------------------------------------------------------
 
-    constructor(address initialOwner, ProtocolFeeInfo memory protocolFeeInfo_) {
-        _transferOwnership(initialOwner);
-
+    constructor(ProtocolFeeInfo memory protocolFeeInfo_) {
         if (
             protocolFeeInfo_.fee != 0 &&
             protocolFeeInfo_.recipient == address(0)

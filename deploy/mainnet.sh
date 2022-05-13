@@ -9,8 +9,11 @@ export RPC_URL=$RPC_URL_MAINNET
 . $(dirname $0)/common.sh
 
 # deploy contracts
-factory_address=$(deploy Factory $INITIAL_OWNER_MAINNET $PROTOCOL_FEE_MAINNET)
+factory_address=$(deploy Factory $PROTOCOL_FEE_MAINNET)
 echo "Factory=$factory_address"
+
+send $factory_address "transferOwnership(address,bool,bool)" $INITIAL_OWNER_MAINNET true false
+echo "FactoryOwner=$INITIAL_OWNER_MAINNET"
 
 yearn_gate_address=$(deploy YearnGate $factory_address)
 echo "YearnGate=$yearn_gate_address"
