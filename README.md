@@ -18,6 +18,7 @@ Timeless is a yield tokenization protocol that offers _Perpetual Yield Tokens_ (
 -   [`NegativeYieldToken.sol`](src/NegativeYieldToken.sol): ERC20 token for representing NYTs.
 -   [`PerpetualYieldToken.sol`](src/PerpetualYieldToken.sol): ERC20 token for representing PYTs.
 -   [`external/`](src/external/): Interfaces for external contracts Timeless interacts with.
+    -   [`IxPYT.sol`](src/external/IxPYT.sol): Interface for xPYT vaults.
     -   [`YearnVault.sol`](src/external/YearnVault.sol): Interface for Yearn v2 vaults.
 -   [`gates/`](src/gates/): Implementations of `Gate` integrated with different yield protocols.
     -   [`ERC20Gate.sol`](src/gates/ERC20Gate.sol): Abstract implementation of `Gate` for protocols using ERC20 vault shares.
@@ -28,7 +29,6 @@ Timeless is a yield tokenization protocol that offers _Perpetual Yield Tokens_ (
     -   [`ERC20.sol`](src/lib/ERC20.sol): The ERC20 implementation used by `BaseERC20`.
     -   [`FullMath.sol`](src/lib/FullMath.sol): Math library preventing phantom overflows during mulDiv operations.
     -   [`Multicall.sol`](src/lib/Multicall.sol): Enables calling multiple methods in a single call to the contract.
-    -   [`Ownable.sol`](src/lib/Ownable.sol): Basic access control used by `Gate`.
     -   [`SelfPermit.sol`](src/lib/SelfPermit.sol): Functionality to call permit on any EIP-2612-compliant token.
 
 ## Installation
