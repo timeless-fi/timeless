@@ -380,7 +380,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
         // burn PYT and NYT
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
-        burnAmount = _vaultSharesAmountToUnderlyingAmount(
+        burnAmount = _vaultSharesAmountToUnderlyingAmountRoundingUp(
             vault,
             vaultSharesAmount,
             updatedPricePerVaultShare
@@ -1133,6 +1133,13 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
 
     /// @dev Converts a vault share amount into an equivalent underlying asset amount
     function _vaultSharesAmountToUnderlyingAmount(
+        address vault,
+        uint256 vaultSharesAmount,
+        uint256 pricePerVaultShare
+    ) internal view virtual returns (uint256);
+
+    /// @dev Converts a vault share amount into an equivalent underlying asset amount, rounding up
+    function _vaultSharesAmountToUnderlyingAmountRoundingUp(
         address vault,
         uint256 vaultSharesAmount,
         uint256 pricePerVaultShare

@@ -112,6 +112,15 @@ contract ERC4626Gate is ERC20Gate {
     }
 
     /// @inheritdoc Gate
+    function _vaultSharesAmountToUnderlyingAmountRoundingUp(
+        address vault,
+        uint256 vaultSharesAmount,
+        uint256 /*pricePerVaultShare*/
+    ) internal view virtual override returns (uint256) {
+        return ERC4626(vault).previewMint(vaultSharesAmount);
+    }
+
+    /// @inheritdoc Gate
     function _underlyingAmountToVaultSharesAmount(
         address vault,
         uint256 underlyingAmount,
