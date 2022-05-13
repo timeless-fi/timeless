@@ -1006,7 +1006,12 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         /// -----------------------------------------------------------------------
 
         // accrue yield
-        _accrueYield(vault, pyt, msg.sender, updatedPricePerVaultShare);
+        _accrueYield(
+            vault,
+            pyt,
+            address(xPYT) == address(0) ? msg.sender : address(this),
+            updatedPricePerVaultShare
+        );
 
         // burn NYTs and PYTs
         unchecked {
