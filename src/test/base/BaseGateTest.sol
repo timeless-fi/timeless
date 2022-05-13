@@ -1200,6 +1200,109 @@ abstract contract BaseGateTest is BaseTest {
         );
     }
 
+    function test_transferPYT_selfTransfer(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount
+    ) public prankAsTester {
+        // preprocess arguments
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
+
+        // transfer to self
+        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        uint256 beforeBalance = pyt.balanceOf(tester);
+        pyt.transfer(tester, underlyingAmount);
+
+        // check balance
+        assertEqDecimal(
+            pyt.balanceOf(tester),
+            beforeBalance,
+            underlyingDecimals,
+            "PYT self transfer yielded profit"
+        );
+    }
+
+    function test_transferFromPYT_selfTransfer(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount
+    ) public prankAsTester {
+        // preprocess arguments
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // mint underlying
+        underlying.mint(tester, underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            tester,
+            tester,
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
+
+        // transfer to self
+        PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
+        uint256 beforeBalance = pyt.balanceOf(tester);
+        pyt.approve(tester, type(uint256).max);
+        pyt.transferFrom(tester, tester, underlyingAmount);
+
+        // check balance
+        assertEqDecimal(
+            pyt.balanceOf(tester),
+            beforeBalance,
+            underlyingDecimals,
+            "PYT self transferFrom yielded profit"
+        );
+    }
+
     /// -----------------------------------------------------------------------
     /// Failure tests
     /// -----------------------------------------------------------------------
