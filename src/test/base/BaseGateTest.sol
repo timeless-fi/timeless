@@ -53,7 +53,6 @@ abstract contract BaseGateTest is BaseTest {
 
     function setUp() public {
         factory = new Factory(
-            address(this),
             Factory.ProtocolFeeInfo({
                 fee: uint8(PROTOCOL_FEE),
                 recipient: protocolFeeRecipient

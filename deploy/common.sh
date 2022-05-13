@@ -18,3 +18,11 @@ saveContract() {
 	result=$(cat "$ADDRESSES_FILE" | jq -r ". + {\"$1\": \"$2\"}")
 	printf %s "$result" >"$ADDRESSES_FILE"
 }
+
+send() {
+	TO=$1
+	SIG=$2
+	ARGS=${@:3}
+
+	cast send --rpc-url=$RPC_URL --private-key=$PRIVATE_KEY $TO $SIG $ARGS
+}

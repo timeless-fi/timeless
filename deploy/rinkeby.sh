@@ -9,8 +9,11 @@ export RPC_URL=$RPC_URL_RINKEBY
 . $(dirname $0)/common.sh
 
 # deploy contracts
-factory_address=$(deploy Factory $INITIAL_OWNER_RINKEBY $PROTOCOL_FEE_RINKEBY)
+factory_address=$(deploy Factory $PROTOCOL_FEE_RINKEBY)
 echo "Factory=$factory_address"
+
+send $factory_address "transferOwnership(address,bool,bool)" $INITIAL_OWNER_RINKEBY true false
+echo "FactoryOwner=$INITIAL_OWNER_RINKEBY"
 
 yearn_gate_address=$(deploy YearnGate $factory_address)
 echo "YearnGate=$yearn_gate_address"
