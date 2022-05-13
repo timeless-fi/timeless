@@ -116,6 +116,20 @@ contract YearnGate is ERC20Gate {
     }
 
     /// @inheritdoc Gate
+    function _vaultSharesAmountToUnderlyingAmountRoundingUp(
+        address, /*vault*/
+        uint256 vaultSharesAmount,
+        uint256 pricePerVaultShare
+    ) internal view virtual override returns (uint256) {
+        return
+            FullMath.mulDivRoundingUp(
+                vaultSharesAmount,
+                pricePerVaultShare,
+                PRECISION
+            );
+    }
+
+    /// @inheritdoc Gate
     function _underlyingAmountToVaultSharesAmount(
         address, /*vault*/
         uint256 underlyingAmount,
