@@ -949,10 +949,16 @@ abstract contract Gate is
     /// Emergency exit
     /// -----------------------------------------------------------------------
 
+    /// @notice Activates the emergency exit mode for a certain vault. Only callable by owner.
+    /// @dev Activating emergency exit allows PYT/NYT holders to do single-sided burns to redeem the underlying
+    /// collateral. This is to prevent cases where a large portion of PYT/NYT is locked up in a buggy/malicious contract
+    /// and locks up the underlying collateral forever.
+    /// @param vault The vault to activate emergency exit for
+    /// @param pytPriceInUnderlying The amount of underlying asset burning each PYT can redeem. Scaled by PRECISION.
     function ownerActivateEmergencyExitForVault(
         address vault,
         uint96 pytPriceInUnderlying
-    ) external onlyOwner {
+    ) external virtual onlyOwner {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -985,8 +991,13 @@ abstract contract Gate is
         });
     }
 
+    /// @notice Deactivates the emergency exit mode for a certain vault. Only callable by owner.
+    /// @dev Deactivation can only occur when the total supplies of PYT and NYT are equal, because
+    /// otherwise either PYT or NYT will become unbacked.
+    /// @param vault The vault to deactivate emergency exit for
     function ownerDeactivateEmergencyExitForVault(address vault)
         external
+        virtual
         onlyOwner
     {
         /// -----------------------------------------------------------------------
@@ -1015,11 +1026,17 @@ abstract contract Gate is
         delete emergencyExitStatusOfVault[vault];
     }
 
+    /// @notice Emergency exit NYTs into the underlying asset. Only callable when emergency exit has
+    /// been activated for the vault.
+    /// @param vault The vault to exit NYT for
+    /// @param amount The amount of NYT to exit
+    /// @param recipient The recipient of the underlying asset
+    /// @return underlyingAmount The amount of underlying asset exited
     function emergencyExitNegativeYieldToken(
         address vault,
         uint256 amount,
         address recipient
-    ) external returns (uint256 underlyingAmount) {
+    ) external virtual returns (uint256 underlyingAmount) {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
@@ -1062,11 +1079,17 @@ abstract contract Gate is
         );
     }
 
+    /// @notice Emergency exit PYTs into the underlying asset. Only callable when emergency exit has
+    /// been activated for the vault.
+    /// @param vault The vault to exit PYT for
+    /// @param amount The amount of PYT to exit
+    /// @param recipient The recipient of the underlying asset
+    /// @return underlyingAmount The amount of underlying asset exited
     function emergencyExitPerpetualYieldToken(
         address vault,
         uint256 amount,
         address recipient
-    ) external returns (uint256 underlyingAmount) {
+    ) external virtual returns (uint256 underlyingAmount) {
         /// -----------------------------------------------------------------------
         /// Validation
         /// -----------------------------------------------------------------------
