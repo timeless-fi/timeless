@@ -26,7 +26,6 @@ Timeless is a yield tokenization protocol that offers _Perpetual Yield Tokens_ (
     -   [`ERC4626Gate.sol`](src/gates/ERC4626Gate.sol): Implementation of `Gate` that uses ERC4626 vaults.
 -   [`lib/`](src/lib/): Libraries used by other contracts.
     -   [`BaseERC20.sol`](src/lib/BaseERC20.sol): The basic gate-controlled ERC20 class used by `PerpetualYieldToken` and `NegativeYieldToken`.
-    -   [`ERC20.sol`](src/lib/ERC20.sol): The ERC20 implementation used by `BaseERC20`.
     -   [`FullMath.sol`](src/lib/FullMath.sol): Math library preventing phantom overflows during mulDiv operations.
     -   [`Multicall.sol`](src/lib/Multicall.sol): Enables calling multiple methods in a single call to the contract.
     -   [`SelfPermit.sol`](src/lib/SelfPermit.sol): Functionality to call permit on any EIP-2612-compliant token.
