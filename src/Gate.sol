@@ -992,8 +992,6 @@ abstract contract Gate is
     }
 
     /// @notice Deactivates the emergency exit mode for a certain vault. Only callable by owner.
-    /// @dev Deactivation can only occur when the total supplies of PYT and NYT are equal, because
-    /// otherwise either PYT or NYT will become unbacked.
     /// @param vault The vault to deactivate emergency exit for
     function ownerDeactivateEmergencyExitForVault(address vault)
         external
@@ -1007,15 +1005,6 @@ abstract contract Gate is
         // can only deactivate emergency exit when it's already activated
         if (!emergencyExitStatusOfVault[vault].activated) {
             revert Error_EmergencyExitNotActivated();
-        }
-
-        // can only deactivate emergency exit when the total suppies of
-        // PYT and NYT are equal, because otherwise either PYT or NYT will
-        // become unbacked
-        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
-        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
-        if (nyt.totalSupply() != pyt.totalSupply()) {
-            revert Error_YieldTokensImbalanced();
         }
 
         /// -----------------------------------------------------------------------
