@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity 0.8.13;
 
+import {BoringOwnable} from "boringsolidity/BoringOwnable.sol";
+
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
@@ -31,7 +33,12 @@ import {PerpetualYieldToken} from "./PerpetualYieldToken.sol";
 ///    each vault share can be redeemed for.
 /// 5) If vault shares are represented using an ERC20 token, then the ERC20 token contract must be
 ///    the vault contract itself.
-abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
+abstract contract Gate is
+    ReentrancyGuard,
+    Multicall,
+    SelfPermit,
+    BoringOwnable
+{
     /// -----------------------------------------------------------------------
     /// Library usage
     /// -----------------------------------------------------------------------
@@ -43,9 +50,12 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// Errors
     /// -----------------------------------------------------------------------
 
+    error Error_InvalidInput();
     error Error_VaultSharesNotERC20();
     error Error_TokenPairNotDeployed();
+    error Error_EmergencyExitNotActivated();
     error Error_SenderNotPerpetualYieldToken();
+    error Error_EmergencyExitAlreadyActivated();
 
     /// -----------------------------------------------------------------------
     /// Events
@@ -103,6 +113,18 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     );
 
     /// -----------------------------------------------------------------------
+    /// Structs
+    /// -----------------------------------------------------------------------
+
+    /// @param activated True if emergency exit has been activated, false if not
+    /// @param pytPriceInUnderlying The amount of underlying assets each PYT can redeem for.
+    /// Should be a value in the range [0, PRECISION]
+    struct EmergencyExitStatus {
+        bool activated;
+        uint96 pytPriceInUnderlying;
+    }
+
+    /// -----------------------------------------------------------------------
     /// Constants
     /// -----------------------------------------------------------------------
 
@@ -145,11 +167,9 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// @dev vault => user => value
     mapping(address => mapping(address => uint256)) public userAccruedYield;
 
-    /// @notice The total supply of the yield tokens of a certain vault. Since PYTs and NYTs
-    /// are always created in pairs, they always have the same total supply.
-    /// Uses PRECISION.
+    /// @notice Stores info relevant to emergency exits of a vault.
     /// @dev vault => value
-    mapping(address => uint256) public yieldTokenTotalSupply;
+    mapping(address => EmergencyExitStatus) public emergencyExitStatusOfVault;
 
     /// -----------------------------------------------------------------------
     /// Initialization
@@ -672,7 +692,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
             }
 
             // mint NYTs and PYTs
-            yieldTokenTotalSupply[vault] += yieldAmount;
             nyt.gateMint(nytRecipient, yieldAmount);
             if (address(xPYT) == address(0)) {
                 // mint raw PYT to recipient
@@ -750,7 +769,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         yieldAmount = _getClaimableYieldAmount(
             vault,
             user,
-            _computeYieldPerToken(vault, getPricePerVaultShare(vault)),
+            _computeYieldPerToken(vault, pyt, getPricePerVaultShare(vault)),
             userYieldPerTokenStored_,
             pyt.balanceOf(user)
         );
@@ -773,7 +792,12 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         virtual
         returns (uint256)
     {
-        return _computeYieldPerToken(vault, getPricePerVaultShare(vault));
+        return
+            _computeYieldPerToken(
+                vault,
+                getPerpetualYieldTokenForVault(vault),
+                getPricePerVaultShare(vault)
+            );
     }
 
     /// @notice Returns the underlying token of a vault.
@@ -883,6 +907,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
+            pyt,
             updatedPricePerVaultShare
         );
         yieldPerTokenStored[vault] = updatedYieldPerToken;
@@ -920,6 +945,205 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     }
 
     /// -----------------------------------------------------------------------
+    /// Emergency exit
+    /// -----------------------------------------------------------------------
+
+    /// @notice Activates the emergency exit mode for a certain vault. Only callable by owner.
+    /// @dev Activating emergency exit allows PYT/NYT holders to do single-sided burns to redeem the underlying
+    /// collateral. This is to prevent cases where a large portion of PYT/NYT is locked up in a buggy/malicious contract
+    /// and locks up the underlying collateral forever.
+    /// @param vault The vault to activate emergency exit for
+    /// @param pytPriceInUnderlying The amount of underlying asset burning each PYT can redeem. Scaled by PRECISION.
+    function ownerActivateEmergencyExitForVault(
+        address vault,
+        uint96 pytPriceInUnderlying
+    ) external virtual onlyOwner {
+        /// -----------------------------------------------------------------------
+        /// Validation
+        /// -----------------------------------------------------------------------
+
+        // we only allow emergency exit to be activated once (until deactivation)
+        // because if pytPriceInUnderlying is ever modified after activation
+        // then PYT/NYT will become unbacked
+        if (emergencyExitStatusOfVault[vault].activated) {
+            revert Error_EmergencyExitAlreadyActivated();
+        }
+
+        // we need to ensure the PYT price value is within the range [0, PRECISION]
+        if (pytPriceInUnderlying > PRECISION) {
+            revert Error_InvalidInput();
+        }
+
+        // the PYT & NYT must have already been deployed
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
+        if (address(nyt).code.length == 0) {
+            revert Error_TokenPairNotDeployed();
+        }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        emergencyExitStatusOfVault[vault] = EmergencyExitStatus({
+            activated: true,
+            pytPriceInUnderlying: pytPriceInUnderlying
+        });
+    }
+
+    /// @notice Deactivates the emergency exit mode for a certain vault. Only callable by owner.
+    /// @param vault The vault to deactivate emergency exit for
+    function ownerDeactivateEmergencyExitForVault(address vault)
+        external
+        virtual
+        onlyOwner
+    {
+        /// -----------------------------------------------------------------------
+        /// Validation
+        /// -----------------------------------------------------------------------
+
+        // can only deactivate emergency exit when it's already activated
+        if (!emergencyExitStatusOfVault[vault].activated) {
+            revert Error_EmergencyExitNotActivated();
+        }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        // reset the emergency exit status
+        delete emergencyExitStatusOfVault[vault];
+    }
+
+    /// @notice Emergency exit NYTs into the underlying asset. Only callable when emergency exit has
+    /// been activated for the vault.
+    /// @param vault The vault to exit NYT for
+    /// @param amount The amount of NYT to exit
+    /// @param recipient The recipient of the underlying asset
+    /// @return underlyingAmount The amount of underlying asset exited
+    function emergencyExitNegativeYieldToken(
+        address vault,
+        uint256 amount,
+        address recipient
+    ) external virtual returns (uint256 underlyingAmount) {
+        /// -----------------------------------------------------------------------
+        /// Validation
+        /// -----------------------------------------------------------------------
+
+        // ensure emergency exit is active
+        EmergencyExitStatus memory status = emergencyExitStatusOfVault[vault];
+        if (!status.activated) {
+            revert Error_EmergencyExitNotActivated();
+        }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
+
+        // accrue yield
+        _accrueYield(vault, pyt, msg.sender, updatedPricePerVaultShare);
+
+        // burn NYT from the sender
+        NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
+        nyt.gateBurn(msg.sender, amount);
+
+        /// -----------------------------------------------------------------------
+        /// Effects
+        /// -----------------------------------------------------------------------
+
+        // compute how much of the underlying assets to give the recipient
+        // rounds down
+        underlyingAmount = FullMath.mulDiv(
+            amount,
+            PRECISION - status.pytPriceInUnderlying,
+            PRECISION
+        );
+
+        // withdraw underlying from vault to recipient
+        // don't check balance since user can just withdraw slightly less
+        // saves gas this way
+        underlyingAmount = _withdrawFromVault(
+            recipient,
+            vault,
+            underlyingAmount,
+            updatedPricePerVaultShare,
+            false
+        );
+    }
+
+    /// @notice Emergency exit PYTs into the underlying asset. Only callable when emergency exit has
+    /// been activated for the vault.
+    /// @param vault The vault to exit PYT for
+    /// @param xPYT The xPYT contract to use for burning PYT. Set to 0 to burn raw PYT instead.
+    /// @param amount The amount of PYT to exit
+    /// @param recipient The recipient of the underlying asset
+    /// @return underlyingAmount The amount of underlying asset exited
+    function emergencyExitPerpetualYieldToken(
+        address vault,
+        IxPYT xPYT,
+        uint256 amount,
+        address recipient
+    ) external virtual returns (uint256 underlyingAmount) {
+        /// -----------------------------------------------------------------------
+        /// Validation
+        /// -----------------------------------------------------------------------
+
+        // ensure emergency exit is active
+        EmergencyExitStatus memory status = emergencyExitStatusOfVault[vault];
+        if (!status.activated) {
+            revert Error_EmergencyExitNotActivated();
+        }
+
+        /// -----------------------------------------------------------------------
+        /// State updates
+        /// -----------------------------------------------------------------------
+
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
+
+        // accrue yield
+        _accrueYield(vault, pyt, msg.sender, updatedPricePerVaultShare);
+
+        if (address(xPYT) == address(0)) {
+            // burn raw PYT from sender
+            pyt.gateBurn(msg.sender, amount);
+        } else {
+            /// -----------------------------------------------------------------------
+            /// Effects
+            /// -----------------------------------------------------------------------
+
+            // convert xPYT to PYT then burn
+            xPYT.withdraw(amount, address(this), msg.sender);
+            pyt.gateBurn(address(this), amount);
+        }
+
+        /// -----------------------------------------------------------------------
+        /// Effects
+        /// -----------------------------------------------------------------------
+
+        // compute how much of the underlying assets to give the recipient
+        // rounds down
+        underlyingAmount = FullMath.mulDiv(
+            amount,
+            status.pytPriceInUnderlying,
+            PRECISION
+        );
+
+        // withdraw underlying from vault to recipient
+        // don't check balance since user can just withdraw slightly less
+        // saves gas this way
+        underlyingAmount = _withdrawFromVault(
+            recipient,
+            vault,
+            underlyingAmount,
+            updatedPricePerVaultShare,
+            false
+        );
+    }
+
+    /// -----------------------------------------------------------------------
     /// Internal utilities
     /// -----------------------------------------------------------------------
 
@@ -932,6 +1156,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     ) internal virtual {
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
+            pyt,
             updatedPricePerVaultShare
         );
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][user];
@@ -982,7 +1207,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         );
 
         // mint NYTs and PYTs
-        yieldTokenTotalSupply[vault] += underlyingAmount;
         nyt.gateMint(nytRecipient, underlyingAmount);
         if (address(xPYT) == address(0)) {
             // mint raw PYT to recipient
@@ -1026,11 +1250,6 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         );
 
         // burn NYTs and PYTs
-        unchecked {
-            // Cannot underflow because a user's balance
-            // will never be larger than the total supply.
-            yieldTokenTotalSupply[vault] -= underlyingAmount;
-        }
         nyt.gateBurn(msg.sender, underlyingAmount);
         if (address(xPYT) == address(0)) {
             // burn raw PYT from sender
@@ -1068,6 +1287,7 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
         // accrue yield
         uint256 updatedYieldPerToken = _computeYieldPerToken(
             vault,
+            pyt,
             updatedPricePerVaultShare
         );
         uint256 userYieldPerTokenStored_ = userYieldPerTokenStored[vault][
@@ -1172,9 +1392,10 @@ abstract contract Gate is ReentrancyGuard, Multicall, SelfPermit {
     /// @dev Computes the latest yieldPerToken value for a vault.
     function _computeYieldPerToken(
         address vault,
+        PerpetualYieldToken pyt,
         uint256 updatedPricePerVaultShare
     ) internal view virtual returns (uint256) {
-        uint256 pytTotalSupply = yieldTokenTotalSupply[vault];
+        uint256 pytTotalSupply = pyt.totalSupply();
         if (pytTotalSupply == 0) {
             return yieldPerTokenStored[vault];
         }

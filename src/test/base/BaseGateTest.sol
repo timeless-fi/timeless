@@ -1303,6 +1303,679 @@ abstract contract BaseGateTest is BaseTest {
     }
 
     /// -----------------------------------------------------------------------
+    /// Emergency exit tests
+    /// -----------------------------------------------------------------------
+
+    function test_canActivateEmergencyExit(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            0
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+        (bool activated, uint96 pytPriceInUnderlying_) = gate
+            .emergencyExitStatusOfVault(vault);
+        assertTrue(activated, "not activated");
+        assertEqDecimal(
+            pytPriceInUnderlying_,
+            pytPriceInUnderlying,
+            underlyingDecimals,
+            "pytPriceInUnderlying incorrect"
+        );
+    }
+
+    function test_cannotActivateEmergencyExit_withoutAuth(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            0
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        vm.stopPrank();
+        vm.startPrank(tester);
+        vm.expectRevert(bytes("Ownable: caller is not the owner"));
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+        vm.stopPrank();
+    }
+
+    function test_cannotActivateEmergencyExit_forNonexistentVault(
+        uint96 pytPriceInUnderlying
+    ) public {
+        pytPriceInUnderlying %= uint96(PRECISION);
+        address fakeVault = address(0x42069);
+        vm.expectRevert(
+            abi.encodeWithSignature("Error_TokenPairNotDeployed()")
+        );
+        gate.ownerActivateEmergencyExitForVault(
+            fakeVault,
+            uint96((PRECISION * 3) / 4)
+        );
+    }
+
+    function test_cannotActivateEmergencyExit_withInvalidPYTPrice(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            0
+        );
+
+        (, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        vm.expectRevert(abi.encodeWithSignature("Error_InvalidInput()"));
+        gate.ownerActivateEmergencyExitForVault(vault, uint96(PRECISION + 1));
+    }
+
+    function test_cannotActivateEmergencyExit_whenActivated(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            0
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+        vm.expectRevert(
+            abi.encodeWithSignature("Error_EmergencyExitAlreadyActivated()")
+        );
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+    }
+
+    function test_canDeactivateEmergencyExit(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            0
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+        gate.ownerDeactivateEmergencyExitForVault(vault);
+        (bool activated, uint96 pytPriceInUnderlying_) = gate
+            .emergencyExitStatusOfVault(vault);
+        assertTrue(!activated, "still activated");
+        assertEqDecimal(
+            pytPriceInUnderlying_,
+            0,
+            underlyingDecimals,
+            "pytPriceInUnderlying incorrect"
+        );
+    }
+
+    function test_cannotDeactivateEmergencyExit_withoutAuth(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            0
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+        vm.stopPrank();
+        vm.startPrank(tester);
+        vm.expectRevert(bytes("Ownable: caller is not the owner"));
+        gate.ownerDeactivateEmergencyExitForVault(vault);
+        vm.stopPrank();
+    }
+
+    function test_cannotDeactivateEmergencyExit_whenNotActivated(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            0
+        );
+
+        (, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        vm.expectRevert(
+            abi.encodeWithSignature("Error_EmergencyExitNotActivated()")
+        );
+        gate.ownerDeactivateEmergencyExitForVault(vault);
+    }
+
+    function test_canEmergencyExitNYT(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        // mint underlying
+        underlying.mint(address(this), underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            address(this),
+            address(this),
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
+
+        // activate emergency exit
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+
+        // emergency exit
+        uint256 beforeUnderlyingBalance = underlying.balanceOf(recipient);
+        uint256 beforeNYTBalance = gate
+            .getNegativeYieldTokenForVault(vault)
+            .balanceOf(address(this));
+        bool shouldExpectWithdrawRevert = _shouldExpectExitToUnderlyingRevert(
+            vault,
+            FullMath.mulDiv(
+                underlyingAmount,
+                PRECISION - pytPriceInUnderlying,
+                PRECISION
+            )
+        );
+        if (shouldExpectWithdrawRevert) {
+            vm.expectRevert(arithmeticError);
+        }
+        uint256 underlyingAmountReceived = gate.emergencyExitNegativeYieldToken(
+            vault,
+            underlyingAmount,
+            recipient
+        );
+        if (shouldExpectWithdrawRevert) {
+            // remaining assertions are pointless
+            return;
+        }
+        assertEqDecimal(
+            underlying.balanceOf(recipient) - beforeUnderlyingBalance,
+            underlyingAmountReceived,
+            underlyingDecimals,
+            "didn't receive underlying"
+        );
+        assertEqDecimalEpsilonAround(
+            underlyingAmountReceived,
+            FullMath.mulDiv(
+                underlyingAmount,
+                PRECISION - pytPriceInUnderlying,
+                PRECISION
+            ),
+            underlyingDecimals,
+            10**underlyingDecimals
+        );
+        assertEqDecimal(
+            beforeNYTBalance -
+                gate.getNegativeYieldTokenForVault(vault).balanceOf(
+                    address(this)
+                ),
+            underlyingAmount,
+            underlyingDecimals,
+            "didn't burn NYT"
+        );
+    }
+
+    function test_cannotEmergencyExitNYT_whenNotActivated(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        // mint underlying
+        underlying.mint(address(this), underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            address(this),
+            address(this),
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
+
+        // emergency exit
+        vm.expectRevert(
+            abi.encodeWithSignature("Error_EmergencyExitNotActivated()")
+        );
+        gate.emergencyExitNegativeYieldToken(
+            vault,
+            underlyingAmount,
+            recipient
+        );
+    }
+
+    function test_canEmergencyExitPYT(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        // mint underlying
+        underlying.mint(address(this), underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            address(this),
+            address(this),
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
+
+        // activate emergency exit
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+
+        // emergency exit
+        uint256 beforeUnderlyingBalance = underlying.balanceOf(recipient);
+        uint256 beforePYTBalance = gate
+            .getPerpetualYieldTokenForVault(vault)
+            .balanceOf(address(this));
+        uint256 underlyingAmountReceived = gate
+            .emergencyExitPerpetualYieldToken(
+                vault,
+                XPYT_NULL,
+                underlyingAmount,
+                recipient
+            );
+        assertEqDecimal(
+            underlying.balanceOf(recipient) - beforeUnderlyingBalance,
+            underlyingAmountReceived,
+            underlyingDecimals,
+            "didn't receive underlying"
+        );
+        assertEqDecimalEpsilonAround(
+            underlyingAmountReceived,
+            FullMath.mulDiv(underlyingAmount, pytPriceInUnderlying, PRECISION),
+            underlyingDecimals,
+            10**underlyingDecimals
+        );
+        assertEqDecimal(
+            beforePYTBalance -
+                gate.getPerpetualYieldTokenForVault(vault).balanceOf(
+                    address(this)
+                ),
+            underlyingAmount,
+            underlyingDecimals,
+            "didn't burn PYT"
+        );
+    }
+
+    function test_cannotEmergencyExitPYT_whenNotActivated(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        // test
+        // mint underlying
+        underlying.mint(address(this), underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            address(this),
+            address(this),
+            vault,
+            XPYT_NULL,
+            underlyingAmount
+        );
+
+        // emergency exit
+        vm.expectRevert(
+            abi.encodeWithSignature("Error_EmergencyExitNotActivated()")
+        );
+        gate.emergencyExitPerpetualYieldToken(
+            vault,
+            XPYT_NULL,
+            underlyingAmount,
+            recipient
+        );
+    }
+
+    function test_canEmergencyExitXPYT(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount,
+        uint96 pytPriceInUnderlying
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        pytPriceInUnderlying %= uint96(PRECISION);
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        IxPYT xPYT = new TestXPYT(
+            ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
+        );
+
+        // test
+        // mint underlying
+        underlying.mint(address(this), underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            address(this),
+            address(this),
+            vault,
+            xPYT,
+            underlyingAmount
+        );
+
+        // activate emergency exit
+        gate.ownerActivateEmergencyExitForVault(vault, pytPriceInUnderlying);
+
+        // emergency exit
+        uint256 beforeUnderlyingBalance = underlying.balanceOf(recipient);
+        uint256 beforeXPYTBalance = xPYT.balanceOf(address(this));
+        uint256 expectedXPYTBurnt = xPYT.previewWithdraw(underlyingAmount);
+        xPYT.approve(address(gate), type(uint256).max);
+        uint256 underlyingAmountReceived = gate
+            .emergencyExitPerpetualYieldToken(
+                vault,
+                xPYT,
+                underlyingAmount,
+                recipient
+            );
+        assertEqDecimal(
+            underlying.balanceOf(recipient) - beforeUnderlyingBalance,
+            underlyingAmountReceived,
+            underlyingDecimals,
+            "didn't receive underlying"
+        );
+        assertEqDecimalEpsilonAround(
+            underlyingAmountReceived,
+            FullMath.mulDiv(underlyingAmount, pytPriceInUnderlying, PRECISION),
+            underlyingDecimals,
+            10**underlyingDecimals
+        );
+        assertEqDecimal(
+            beforeXPYTBalance - xPYT.balanceOf(address(this)),
+            expectedXPYTBurnt,
+            underlyingDecimals,
+            "didn't burn xPYT"
+        );
+    }
+
+    function test_cannotEmergencyExitXPYT_whenNotActivated(
+        uint8 underlyingDecimals,
+        uint120 initialUnderlyingAmount,
+        uint120 initialYieldAmount,
+        uint120 underlyingAmount
+    ) public {
+        // setup
+        (
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        ) = _preprocessArgs(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount,
+            underlyingAmount
+        );
+
+        (TestERC20 underlying, address vault) = _setUpVault(
+            underlyingDecimals,
+            initialUnderlyingAmount,
+            initialYieldAmount
+        );
+
+        IxPYT xPYT = new TestXPYT(
+            ERC20(address(gate.getPerpetualYieldTokenForVault(vault)))
+        );
+
+        // test
+        // mint underlying
+        underlying.mint(address(this), underlyingAmount);
+
+        // enter
+        gate.enterWithUnderlying(
+            address(this),
+            address(this),
+            vault,
+            xPYT,
+            underlyingAmount
+        );
+
+        // emergency exit
+        vm.expectRevert(
+            abi.encodeWithSignature("Error_EmergencyExitNotActivated()")
+        );
+        gate.emergencyExitPerpetualYieldToken(
+            vault,
+            xPYT,
+            underlyingAmount,
+            recipient
+        );
+    }
+
+    /// -----------------------------------------------------------------------
     /// Failure tests
     /// -----------------------------------------------------------------------
 
