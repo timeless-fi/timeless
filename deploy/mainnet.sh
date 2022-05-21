@@ -18,5 +18,11 @@ echo "FactoryOwner=$INITIAL_OWNER_MAINNET"
 yearn_gate_address=$(deploy YearnGate $factory_address)
 echo "YearnGate=$yearn_gate_address"
 
+send $yearn_gate_address "transferOwnership(address,bool,bool)" $INITIAL_OWNER_MAINNET true false
+echo "YearnGateOwner=$INITIAL_OWNER_MAINNET"
+
 erc4626_gate_address=$(deploy ERC4626Gate $factory_address)
 echo "ERC4626Gate=$erc4626_gate_address"
+
+send $erc4626_gate_address "transferOwnership(address,bool,bool)" $INITIAL_OWNER_MAINNET true false
+echo "ERC4626GateOwner=$INITIAL_OWNER_MAINNET"
