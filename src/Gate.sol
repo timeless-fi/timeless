@@ -53,7 +53,6 @@ abstract contract Gate is
     error Error_InvalidInput();
     error Error_VaultSharesNotERC20();
     error Error_TokenPairNotDeployed();
-    error Error_YieldTokensImbalanced();
     error Error_EmergencyExitNotActivated();
     error Error_SenderNotPerpetualYieldToken();
     error Error_EmergencyExitAlreadyActivated();
@@ -1040,9 +1039,15 @@ abstract contract Gate is
         /// State updates
         /// -----------------------------------------------------------------------
 
+        PerpetualYieldToken pyt = getPerpetualYieldTokenForVault(vault);
+        uint256 updatedPricePerVaultShare = getPricePerVaultShare(vault);
+
+        // accrue yield
+        _accrueYield(vault, pyt, msg.sender, updatedPricePerVaultShare);
+
         // burn NYT from the sender
         NegativeYieldToken nyt = getNegativeYieldTokenForVault(vault);
-        nyt.gateBurn(msg.sender, underlyingAmount);
+        nyt.gateBurn(msg.sender, amount);
 
         /// -----------------------------------------------------------------------
         /// Effects
@@ -1063,7 +1068,7 @@ abstract contract Gate is
             recipient,
             vault,
             underlyingAmount,
-            getPricePerVaultShare(vault),
+            updatedPricePerVaultShare,
             false
         );
     }
@@ -1071,11 +1076,13 @@ abstract contract Gate is
     /// @notice Emergency exit PYTs into the underlying asset. Only callable when emergency exit has
     /// been activated for the vault.
     /// @param vault The vault to exit PYT for
+    /// @param xPYT The xPYT contract to use for burning PYT. Set to 0 to burn raw PYT instead.
     /// @param amount The amount of PYT to exit
     /// @param recipient The recipient of the underlying asset
     /// @return underlyingAmount The amount of underlying asset exited
     function emergencyExitPerpetualYieldToken(
         address vault,
+        IxPYT xPYT,
         uint256 amount,
         address recipient
     ) external virtual returns (uint256 underlyingAmount) {
@@ -1099,8 +1106,18 @@ abstract contract Gate is
         // accrue yield
         _accrueYield(vault, pyt, msg.sender, updatedPricePerVaultShare);
 
-        // burn PYT from the sender
-        pyt.gateBurn(msg.sender, amount);
+        if (address(xPYT) == address(0)) {
+            // burn raw PYT from sender
+            pyt.gateBurn(msg.sender, amount);
+        } else {
+            /// -----------------------------------------------------------------------
+            /// Effects
+            /// -----------------------------------------------------------------------
+
+            // convert xPYT to PYT then burn
+            xPYT.withdraw(amount, address(this), msg.sender);
+            pyt.gateBurn(address(this), amount);
+        }
 
         /// -----------------------------------------------------------------------
         /// Effects
