@@ -1255,7 +1255,7 @@ abstract contract BaseGateTest is BaseTest {
         uint120 initialUnderlyingAmount,
         uint120 initialYieldAmount,
         uint120 underlyingAmount
-    ) public prankAsTester {
+    ) public {
         // preprocess arguments
         (
             underlyingDecimals,
@@ -1276,7 +1276,7 @@ abstract contract BaseGateTest is BaseTest {
         );
 
         // mint underlying
-        underlying.mint(tester, underlyingAmount);
+        underlying.mint(address(this), underlyingAmount);
 
         // enter
         gate.enterWithUnderlying(
@@ -1290,7 +1290,9 @@ abstract contract BaseGateTest is BaseTest {
         // transfer to self
         PerpetualYieldToken pyt = gate.getPerpetualYieldTokenForVault(vault);
         uint256 beforeBalance = pyt.balanceOf(tester);
-        pyt.approve(tester, type(uint256).max);
+        vm.stopPrank();
+        vm.prank(tester);
+        pyt.approve(address(this), type(uint256).max);
         pyt.transferFrom(tester, tester, underlyingAmount);
 
         // check balance

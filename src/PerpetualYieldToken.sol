@@ -89,7 +89,7 @@ contract PerpetualYieldToken is BaseERC20 {
         // do transfer
         // skip during self transfers since toBalance is cached
         // which leads to free minting, a critical issue
-        if (msg.sender != to) {
+        if (from != to) {
             balanceOf[from] = fromBalance - amount;
 
             // Cannot overflow because the sum of all user
