@@ -1,5 +1,5 @@
 {
-  "Factory": "0xec06456d7c90858fd44d0b523d20b703e7a4cab9",
-  "YearnGate": "0x4bc4c9a6556fb1577cfd3a078eea2c8c96b98427",
-  "ERC4626Gate": "0xe59aee563475aa1afcb5d5698f78cc6dd5228e89"
+  "Factory": "0x3a3b70721e026fcc46f4f16da8291970713e412e",
+  "YearnGate": "0xd6ef221be3331e16478e73229e40e1f69c94d9e6",
+  "ERC4626Gate": "0xb5c82a0d5854e3bceb57f51776fb7bbf05ed4ac2"
 }
