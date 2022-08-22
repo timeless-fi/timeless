@@ -1,4 +1,4 @@
-[default]
+[profile.default]
 ffi = false
 fuzz_runs = 256
 optimizer = true
@@ -7,6 +7,6 @@ remappings = ["ds-test/=lib/ds-test/src/", "solmate/=lib/solmate/src/", "borings
 verbosity = 1
 
 # Extreme Fuzzing CI Profile :P
-[ci]
+[profile.ci]
 fuzz_runs = 100_000
 verbosity = 4
